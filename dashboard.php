@@ -1,34 +1,48 @@
 <?php 
 session_start();
-require_once 'config/db.php'; // เชื่อมต่อฐานข้อมูล
+require_once 'config/db.php';
 
-// ถ้ายังไม่ Login ให้เด้งออก
 if (!isset($_SESSION['user_id'])) { header("Location: login.php"); exit; }
 
-// --- ส่วนดึงข้อมูล (Data Fetching) ---
 $stats = [ 'total' => 0, 'success' => 0, 'pending' => 0, 'late' => 0 ];
 $recent_docs = [];
 
+// ตรวจสอบสิทธิ์ (Admin หรือ User)
+$is_admin = (stripos($_SESSION['role'], 'admin') !== false);
+$user_id = $_SESSION['user_id'];
+
 try {
     if (isset($pdo)) {
-        // 1. ดึงข้อมูลสรุปยอด (Stats)
-        $stats['total']   = $pdo->query("SELECT COUNT(*) FROM documents")->fetchColumn();
-        $stats['success'] = $pdo->query("SELECT COUNT(*) FROM documents WHERE current_status = 'Received'")->fetchColumn();
-        $stats['pending'] = $pdo->query("SELECT COUNT(*) FROM documents WHERE current_status IN ('Registered', 'Sent')")->fetchColumn();
-        $stats['late']    = $pdo->query("SELECT COUNT(*) FROM documents WHERE current_status = 'Late'")->fetchColumn();
+        // --- 1. สรุปยอด (Stats) ---
+        // ถ้าไม่ใช่ Admin ให้เพิ่มเงื่อนไข WHERE created_by = $user_id
+        $where_clause = $is_admin ? "" : "WHERE created_by = $user_id";
+        
+        // (ต้องแยกเงื่อนไขสำหรับแต่ละสถานะ)
+        $where_success = $is_admin ? "WHERE current_status = 'Received'" : "WHERE current_status = 'Received' AND created_by = $user_id";
+        $where_pending = $is_admin ? "WHERE current_status IN ('Registered', 'Sent')" : "WHERE current_status IN ('Registered', 'Sent') AND created_by = $user_id";
+        $where_late    = $is_admin ? "WHERE current_status = 'Late'" : "WHERE current_status = 'Late' AND created_by = $user_id";
 
-        // 2. ดึงรายการเอกสารล่าสุด 10 รายการ (เพิ่มจำนวนหน่อยจะได้เห็นเยอะขึ้น)
+        $stats['total']   = $pdo->query("SELECT COUNT(*) FROM documents $where_clause")->fetchColumn();
+        $stats['success'] = $pdo->query("SELECT COUNT(*) FROM documents $where_success")->fetchColumn();
+        $stats['pending'] = $pdo->query("SELECT COUNT(*) FROM documents $where_pending")->fetchColumn();
+        $stats['late']    = $pdo->query("SELECT COUNT(*) FROM documents $where_late")->fetchColumn();
+
+        // --- 2. รายการล่าสุด ---
         $sql = "SELECT d.*, dt.type_name 
                 FROM documents d 
-                LEFT JOIN document_type dt ON d.type_id = dt.type_id 
-                ORDER BY d.created_at DESC 
-                LIMIT 10";
+                LEFT JOIN document_type dt ON d.type_id = dt.type_id ";
+        
+        if (!$is_admin) {
+            $sql .= " WHERE d.created_by = $user_id ";
+        }
+
+        $sql .= " ORDER BY d.created_at DESC LIMIT 10";
+        
         $stmt = $pdo->query($sql);
         $recent_docs = $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 } catch (PDOException $e) {}
 
-// ฟังก์ชันแปลงสีสถานะ
 function getStatusBadge($status) {
     switch ($status) {
         case 'Received': return '<span class="badge rounded-pill bg-success">สำเร็จ/ได้รับแล้ว</span>';
@@ -44,13 +58,10 @@ function getStatusBadge($status) {
 <head>
     <meta charset="UTF-8">
     <title>Dashboard - EDE System</title>
-    <!-- Bootstrap & CSS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="assets/css/style.css" rel="stylesheet">
-    
-    <!-- Library สร้าง QR Code แบบง่าย (ใช้ JS) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 <body>
@@ -66,8 +77,7 @@ function getStatusBadge($status) {
         ?>
 
         <div class="page-content">
-            <!-- Cards สรุปยอด (เหมือนเดิม) -->
-            <h5 class="mb-4 fw-bold text-secondary">**สรุปสถานะประจำวัน**</h5>
+            <h5 class="mb-4 fw-bold text-secondary">**สรุปสถานะประจำวัน** <?php echo $is_admin ? '(ทั้งหมด)' : '(เฉพาะของคุณ)'; ?></h5>
             <div class="row mb-5 g-4">
                 <div class="col-md-3">
                     <div class="p-4 rounded-5 text-center text-white shadow-sm position-relative overflow-hidden" style="background: linear-gradient(135deg, #4FC3F7, #29B6F6);">
@@ -99,7 +109,6 @@ function getStatusBadge($status) {
                 </div>
             </div>
 
-            <!-- ตารางรายการล่าสุด (เพิ่มปุ่ม QR) -->
             <h5 class="mb-3 fw-bold text-secondary">**รายการเอกสารล่าสุด**</h5>
             <div class="table-responsive rounded-4 shadow-sm border">
                 <table class="table table-hover mb-0 align-middle text-center">
@@ -109,7 +118,7 @@ function getStatusBadge($status) {
                             <th class="py-3 text-start">เรื่อง</th>
                             <th class="py-3">วันที่สร้าง</th>
                             <th class="py-3">สถานะ</th>
-                            <th class="py-3">QR / จัดการ</th> <!-- เพิ่มคอลัมน์นี้ -->
+                            <th class="py-3">QR / จัดการ</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -130,13 +139,10 @@ function getStatusBadge($status) {
                                         <?php echo getStatusBadge($doc['current_status']); ?>
                                     </td>
                                     <td>
-                                        <!-- ปุ่มเรียกดู QR Code -->
                                         <button onclick="showQRModal('<?php echo htmlspecialchars($doc['document_code']); ?>', '<?php echo htmlspecialchars($doc['title']); ?>')" 
                                                 class="btn btn-sm btn-light border rounded-pill shadow-sm text-dark">
-                                            <i class="fas fa-qrcode text-success"></i> QR Code
+                                            <i class="fas fa-qrcode text-success"></i> QR
                                         </button>
-                                        
-                                        <!-- ปุ่มไปหน้าใบปะหน้า -->
                                         <a href="print_cover.php?code=<?php echo $doc['document_code']; ?>" 
                                            class="btn btn-sm btn-light border rounded-circle shadow-sm ms-1" title="พิมพ์ใบปะหน้า">
                                             <i class="fas fa-print"></i>
@@ -158,7 +164,7 @@ function getStatusBadge($status) {
     </div>
 </div>
 
-<!-- Modal แสดง QR Code -->
+<!-- Modal QR Code -->
 <div class="modal fade" id="qrModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content rounded-4 border-0 shadow">
@@ -169,10 +175,7 @@ function getStatusBadge($status) {
             <div class="modal-body text-center py-4">
                 <h5 id="modalDocTitle" class="fw-bold mb-1 text-primary">...</h5>
                 <small id="modalDocCode" class="text-muted d-block mb-3">...</small>
-                
-                <!-- พื้นที่แสดง QR -->
                 <div id="qrcode" class="d-flex justify-content-center my-3"></div>
-                
                 <p class="small text-muted mt-3">ใช้แอปพลิเคชันสแกนเพื่ออัปเดตสถานะ</p>
             </div>
             <div class="modal-footer border-0 justify-content-center pb-4">
@@ -185,30 +188,14 @@ function getStatusBadge($status) {
     </div>
 </div>
 
-<!-- Script จัดการ QR Code Modal -->
 <script>
     function showQRModal(docCode, docTitle) {
-        // 1. อัปเดตข้อความใน Modal
         document.getElementById('modalDocCode').innerText = "รหัส: " + docCode;
         document.getElementById('modalDocTitle').innerText = docTitle;
-        
-        // 2. ตั้งค่าลิงก์ปุ่มพิมพ์
         document.getElementById('btnPrintLink').href = 'print_cover.php?code=' + docCode;
-
-        // 3. สร้าง QR Code ใหม่ (ใช้ JS)
         const qrContainer = document.getElementById("qrcode");
-        qrContainer.innerHTML = ""; // ล้างอันเก่าออกก่อน
-        
-        new QRCode(qrContainer, {
-            text: docCode,
-            width: 200,
-            height: 200,
-            colorDark : "#000000",
-            colorLight : "#ffffff",
-            correctLevel : QRCode.CorrectLevel.H
-        });
-
-        // 4. เปิด Modal
+        qrContainer.innerHTML = "";
+        new QRCode(qrContainer, { text: docCode, width: 200, height: 200, colorDark : "#000000", colorLight : "#ffffff", correctLevel : QRCode.CorrectLevel.H });
         var myModal = new bootstrap.Modal(document.getElementById('qrModal'));
         myModal.show();
     }

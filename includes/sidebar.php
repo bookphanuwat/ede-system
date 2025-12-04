@@ -30,4 +30,6 @@
     <a href="settings.php" class="nav-btn btn-settings">
         <i class="fas fa-cog"></i> ตั้งค่า
     </a>
+    <a href="scan_history.php" class="nav-btn btn-settings">
+        <i class="fas fa-history"></i> ประวัติการสแกน</a>
 </div>
