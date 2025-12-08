@@ -53,7 +53,7 @@ try {
                 <!-- 2. เลขที่อ้างอิง -->
                 <div class="row mb-4 align-items-center">
                     <div class="col-md-3 text-md-end">
-                        <label class="fw-bold text-secondary">เลขที่อ้างอิง</label>
+                        <label class="fw-bold text-secondary">เลขที่เอกสาร</label>
                     </div>
                     <div class="col-md-9">
                         <input type="text" name="reference_no" class="form-control custom-input" placeholder="เช่น ศธ 0512/123 (ถ้ามี)">
