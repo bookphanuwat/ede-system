@@ -22,7 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         // 3. บันทึกลงฐานข้อมูล
         $sql = "INSERT INTO documents (document_code, title, type_id, reference_no, sender_name, receiver_name, created_by, current_status) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, 'Registered')";
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'ลงทะเบียนใหม่')";
         
         $stmt = $pdo->prepare($sql);
         $stmt->execute([
@@ -38,7 +38,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $document_id = $pdo->lastInsertId();
 
         // 4. สร้าง Log แรก
-        $stmtLog = $pdo->prepare("INSERT INTO document_status_log (document_id, status, action_by) VALUES (?, 'Registered', ?)");
+        $stmtLog = $pdo->prepare("INSERT INTO document_status_log (document_id, status, action_by) VALUES (?, 'ลงทะเบียนใหม่', ?)");
         $stmtLog->execute([$document_id, $created_by]);
 
         // 5. ส่งไปหน้าพิมพ์

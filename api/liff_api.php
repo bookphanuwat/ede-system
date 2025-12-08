@@ -7,7 +7,7 @@ $action = $_GET['action'] ?? '';
 try {
     if (!isset($pdo)) throw new Exception("Database connection failed");
 
-    // --- ฟังก์ชัน 1: ค้นหาเอกสาร ---
+    // --- 1. ค้นหาเอกสาร ---
     if ($action === 'search') {
         $keyword = $_GET['keyword'] ?? '';
         if (empty($keyword)) throw new Exception("ระบุคำค้นหา");
@@ -19,12 +19,10 @@ try {
                 ORDER BY d.created_at DESC LIMIT 10";
         $stmt = $pdo->prepare($sql);
         $stmt->execute(["%$keyword%", "%$keyword%"]);
-        $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        
-        echo json_encode(['status' => 'success', 'data' => $results]);
+        echo json_encode(['status' => 'success', 'data' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
     }
 
-    // --- ฟังก์ชัน 2: ดึงประวัติส่วนตัว (ตาม Line ID) ---
+    // --- 2. ประวัติการสแกน (ของคนนั้น) ---
     else if ($action === 'history') {
         $line_id = $_GET['line_id'] ?? '';
         if (empty($line_id)) throw new Exception("No Line ID");
@@ -36,28 +34,30 @@ try {
                 ORDER BY l.action_time DESC LIMIT 20";
         $stmt = $pdo->prepare($sql);
         $stmt->execute([$line_id]);
-        $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-        echo json_encode(['status' => 'success', 'data' => $results]);
+        echo json_encode(['status' => 'success', 'data' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
     }
 
-    // --- ฟังก์ชัน 3: ดูรายละเอียดเอกสาร + Timeline ---
-    else if ($action === 'detail') {
-        $code = $_GET['code'] ?? '';
+    // --- 3. ดึงสถานะ (Updated: ตามคนสร้างเอกสาร) ---
+    else if ($action === 'get_statuses') {
+        // รับ ID ของคนสร้างเอกสาร (Creator) ที่ส่งมาจากหน้าบ้าน
+        $creator_id = $_GET['creator_id'] ?? 0;
+
+        // ดึงสถานะ: เอาของส่วนกลาง (NULL) + ของคนสร้างเอกสารนี้ ($creator_id)
+        $sql = "SELECT * FROM document_statuses WHERE created_by IS NULL";
+        $params = [];
+
+        if ($creator_id > 0) {
+            $sql .= " OR created_by = ?";
+            $params[] = $creator_id;
+        }
         
-        // ข้อมูลเอกสาร
-        $stmt = $pdo->prepare("SELECT * FROM documents WHERE document_code = ?");
-        $stmt->execute([$code]);
-        $doc = $stmt->fetch(PDO::FETCH_ASSOC);
+        $sql .= " ORDER BY status_id ASC";
 
-        if (!$doc) throw new Exception("ไม่พบเอกสาร");
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        $statuses = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        // Timeline
-        $stmt_log = $pdo->prepare("SELECT l.*, u.fullname FROM document_status_log l LEFT JOIN users u ON l.action_by = u.user_id WHERE l.document_id = ? ORDER BY l.action_time DESC");
-        $stmt_log->execute([$doc['document_id']]);
-        $logs = $stmt_log->fetchAll(PDO::FETCH_ASSOC);
-
-        echo json_encode(['status' => 'success', 'doc' => $doc, 'logs' => $logs]);
+        echo json_encode(['status' => 'success', 'data' => $statuses]);
     }
 
 } catch (Exception $e) {
