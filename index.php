@@ -7,14 +7,16 @@ if (!isset($_SESSION['user_id'])) {
     header("Location: login.php");
     exit;
 }
+    require realpath( '../dv-config.php' );
+    require DEV_PATH . '/classes/db.class.v2.php';
+    require DEV_PATH . '/functions/global.php';
+    // require_once realpath('config/db.php');
 
-require_once 'config/db.php';
+    // สำหรับ dev parameter (อนุญาตเฉพาะ alphanumeric)
+    $GET_DEV = sanitizeGetParam('dev', 'alphanumeric', '', 50);
 
-// สำหรับ page parameter (อนุญาตเฉพาะ alphanumeric, dash, underscore)
-$page = isset($_GET['page']) ? preg_replace('/[^a-zA-Z0-9_-]/', '', $_GET['page']) : '';
-
-define('EDE_VERSION', '1.0.0');
-define('EDE_TITLE', 'EDE System - ระบบจัดการเอกสาร');
+define('Q_VERSION', '1.0.0');
+define('Q_TITLE', 'EDE System - ระบบจัดการเอกสาร');
 ?>
 <!DOCTYPE html>
 <html lang="th">
@@ -26,11 +28,16 @@ define('EDE_TITLE', 'EDE System - ระบบจัดการเอกสา�
     <meta name="author" content="ATH Development Team">
     <meta name="keywords" content="document,management,system,ede,tracking">
     <meta name="description" content="ระบบจัดการเอกสารอิเล็กทรอนิกส์ โรงพยาบาลอ่างทอง">
-    <title><?php echo EDE_TITLE; ?></title>
+    <title><?php echo Q_TITLE . Q_VERSION; ?> </title>
 
     <!-- CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="<?php echo ASSET_PATH; ?>/bootstrap/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="<?php echo ASSET_PATH; ?>/@fortawesome/fontawesome-free/css/all.css">
+    <link rel="stylesheet" href="<?php echo ASSET_PATH; ?>/sweetalert2/dist/sweetalert2.min.css">
+    <link rel="stylesheet" href="<?php echo ASSET_PATH; ?>/select2/dist/css/select2.css">
+    <link rel="stylesheet" href="<?php echo ASSET_PATH; ?>/select2-bootstrap-5-theme/dist/select2-bootstrap-5-theme.min.css">
+    <link rel="stylesheet" href="<?php echo ASSET_PATH; ?>/fonts/maledpan/maledpan.css">
+    <link rel="stylesheet" href="<?php echo ASSET_PATH; ?>/fonts/chatthai/chatthai.css">
     <link href="assets/css/style.css" rel="stylesheet">
 </head>
 
@@ -41,12 +48,12 @@ define('EDE_TITLE', 'EDE System - ระบบจัดการเอกสา�
     $jsReq = '';
     $jsVars = ''; // ตัวแปร JavaScript ที่ต้องการส่งจาก PHP
 
-    switch ($page) {
+    switch ($GET_DEV) {
 
         case '':
         case 'main':
             // หน้าเมนูหลัก
-            require 'pages/main-menu.php';
+            require  'pages/main-menu.php';
             break;
 
         case 'dashboard':
@@ -92,6 +99,7 @@ define('EDE_TITLE', 'EDE System - ระบบจัดการเอกสา�
             require 'pages/page-not-found.php';
             break;
     }
+
     ?>
 
     <!-- Core JavaScript -->

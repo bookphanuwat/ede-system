@@ -36,7 +36,7 @@
 
                     <!-- 1. Dashboard -->
                     <div class="col-md-6 col-lg-4">
-                        <a href="index.php?page=dashboard" class="text-decoration-none">
+                        <a href="<?php echo SITE_URL; ?>/dashboard/" class="text-decoration-none">
                             <div class="card menu-card shadow-sm rounded-4 p-4 text-center">
                                 <div class="menu-icon-box shadow-sm" style="background: var(--color-dashboard);">
                                     <i class="fas fa-chart-pie"></i>
@@ -49,7 +49,7 @@
 
                     <!-- 2. ลงทะเบียน -->
                     <div class="col-md-6 col-lg-4">
-                        <a href="index.php?page=register" class="text-decoration-none">
+                        <a href="<?php echo SITE_URL; ?>/register/" class="text-decoration-none">
                             <div class="card menu-card shadow-sm rounded-4 p-4 text-center">
                                 <div class="menu-icon-box shadow-sm" style="background: var(--color-register);">
                                     <i class="fas fa-edit"></i>
@@ -62,7 +62,7 @@
 
                     <!-- 3. ติดตามเอกสาร -->
                     <div class="col-md-6 col-lg-4">
-                        <a href="index.php?page=tracking" class="text-decoration-none">
+                        <a href="<?php echo SITE_URL; ?>/tracking/" class="text-decoration-none">
                             <div class="card menu-card shadow-sm rounded-4 p-4 text-center">
                                 <div class="menu-icon-box shadow-sm" style="background: var(--color-tracking);">
                                     <i class="fas fa-search"></i>
@@ -75,7 +75,7 @@
 
                     <!-- 4. รายงาน -->
                     <div class="col-md-6 col-lg-4">
-                        <a href="index.php?page=report" class="text-decoration-none">
+                        <a href="<?php echo SITE_URL; ?>/report/" class="text-decoration-none">
                             <div class="card menu-card shadow-sm rounded-4 p-4 text-center">
                                 <div class="menu-icon-box shadow-sm" style="background: var(--color-report);">
                                     <i class="fas fa-file-alt"></i>
@@ -88,7 +88,7 @@
 
                     <!-- 5. ตั้งค่า -->
                     <div class="col-md-6 col-lg-4">
-                        <a href="index.php?page=settings" class="text-decoration-none">
+                        <a href="<?php echo SITE_URL; ?>/settings/" class="text-decoration-none">
                             <div class="card menu-card shadow-sm rounded-4 p-4 text-center">
                                 <div class="menu-icon-box shadow-sm" style="background: var(--color-settings);">
                                     <i class="fas fa-cogs"></i>

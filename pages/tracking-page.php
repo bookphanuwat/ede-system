@@ -74,8 +74,7 @@ function getStatusColor($status) {
                 <div class="text-center text-muted mb-3 small"><i class="fas fa-info-circle"></i> คุณสามารถค้นหาได้เฉพาะเอกสารที่คุณเป็นผู้สร้างเท่านั้น</div>
             <?php endif; ?>
 
-            <form method="GET" action="index.php" class="row justify-content-center mb-5">
-                <input type="hidden" name="page" value="tracking">
+            <form method="GET" action="<?php echo SITE_URL; ?>/tracking/" class="row justify-content-center mb-5">
                 <div class="col-md-8">
                     <div class="input-group shadow-sm rounded-pill overflow-hidden bg-white border p-1">
                         <span class="input-group-text border-0 bg-white ps-3 text-muted"><i class="fas fa-search"></i></span>
