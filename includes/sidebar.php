@@ -11,29 +11,29 @@
     </a>
 
     <!-- ลิงก์ Dashboard (แยกออกมาแล้ว) -->
-    <a href="dashboard.php" class="nav-btn btn-dashboard">
+    <a href="index.php?page=dashboard" class="nav-btn btn-dashboard">
         <i class="fas fa-chart-pie"></i> แดชบอร์ด
     </a>
-    
-    <a href="register.php" class="nav-btn btn-register">
+
+    <a href="index.php?page=register" class="nav-btn btn-register">
         <i class="fas fa-edit"></i> ลงทะเบียน
     </a>
-    
-    <a href="tracking.php" class="nav-btn btn-tracking">
+
+    <a href="index.php?page=tracking" class="nav-btn btn-tracking">
         <i class="fas fa-search"></i> ติดตาม
     </a>
-    
-    <a href="report.php" class="nav-btn btn-report">
+
+    <a href="index.php?page=report" class="nav-btn btn-report">
         <i class="fas fa-chart-bar"></i> รายงาน
     </a>
-    
-    <a href="settings.php" class="nav-btn btn-settings">
+
+    <a href="index.php?page=settings" class="nav-btn btn-settings">
         <i class="fas fa-cog"></i> ตั้งค่า
     </a>
-    <a href="scan_history.php" class="nav-btn btn-settings">
+    <a href="index.php?page=scan-history" class="nav-btn btn-settings">
         <i class="fas fa-history"></i> ประวัติการสแกน
     </a>
-    <a href="workflow_settings.php" class="nav-btn btn-status_settings">
-    <i class="fas fa-project-diagram"></i> จัดการ สถานะ
-</a>
+    <a href="index.php?page=workflow-settings" class="nav-btn btn-status_settings">
+        <i class="fas fa-project-diagram"></i> จัดการ สถานะ
+    </a>
 </div>
