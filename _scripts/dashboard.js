@@ -49,7 +49,7 @@ async function openDetailModal(code) {
 
     try {
         // เรียก API เพื่อดึงข้อมูลเอกสาร
-        const res = await fetch(`api/get_doc_info.php?code=${code}`);
+        const res = await fetch(`${site_url}/api/get_doc_info.php?code=${code}`);
         const data = await res.json();
 
         if(data.error) throw new Error(data.error);

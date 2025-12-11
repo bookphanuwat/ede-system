@@ -52,7 +52,7 @@
             <?php
                 // กำหนดตัวแปรสำหรับ JavaScript ที่จะโหลด และโหลด page content
                 $jsReq  = '';
-                $jsVars = '';
+                $jsExt = '';
                 $pageFile = '';
 
                 switch ( $GET_DEV ) {
@@ -64,13 +64,13 @@
                         break;
 
                     case 'dashboard':
-                        $jsReq = '_scripts/dashboard.js';
+                        $jsReq = 'js/dashboard.min.js';
                         $pageFile = 'pages/dashboard-page.php';
                         break;
 
                     case 'register':
-                        $jsReq  = '_scripts/register.js';
-                        $jsVars = "const CURRENT_USER_ID = '" . ( $_SESSION['user_id'] ?? '' ) . "';";
+                        $jsReq  = 'js/register.min.js';
+                        $jsExt = "const CURRENT_USER_ID = '" . ( $_SESSION['user_id'] ?? '' ) . "';";
                         $pageFile = 'pages/register-page.php';
                         break;
 
@@ -108,23 +108,22 @@
     </div><!-- .d-flex -->
 
     <!-- Core JavaScript -->
+    <script>
+        const site_url = '<?php echo SITE_URL; ?>';
+    </script>
     <!-- <script src="<?php echo ASSET_PATH; ?>/jquery/dist/jquery.min.js"></script> -->
     <script src="<?php echo ASSET_PATH; ?>/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 
     <!-- Global Scripts -->
-    <script src="_scripts/global.js"></script>
+    <script src="<?php echo SITE_URL; ?>/js/global.min.js?v=<?php echo filemtime( 'js/global.min.js' ); ?>"></script>
 
-    <!-- Page Specific Variables & Scripts -->
-    <?php if ( !empty( $jsVars ) ): ?>
-    <script>
-        <?php echo $jsVars; ?>
-    </script>
-    <?php endif; ?>
 
-    <?php if ( !empty( $jsReq ) && file_exists( $jsReq ) ): ?>
-    <script src="<?php echo $jsReq; ?>?v=<?php echo filemtime( $jsReq ); ?>"></script>
-    <?php endif; ?>
+    <script async>
+    'use strict';
+    <?php echo( isset( $jsExt ) ) ? $jsExt : ''; ?>
+    <?php ( isset( $jsReq ) ) ? require $jsReq : ''; ?>
+  </script>
 
 </body>
 </html>

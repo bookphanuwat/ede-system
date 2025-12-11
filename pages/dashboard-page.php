@@ -5,7 +5,7 @@
 
     // เริ่มจับเวลา
     $start_time = microtime( true );
-    $time_logs = [];
+    $time_logs  = [];
 
     // ตรวจสอบสิทธิ์
     if ( !isset( $_SESSION['user_id'] ) ) {
@@ -14,45 +14,48 @@
     }
 
     // ดึงข้อมูล
-    $stats = ['total' => 0, 'success' => 0, 'pending' => 0, 'late' => 0];
+    $stats       = ['total' => 0, 'success' => 0, 'pending' => 0, 'late' => 0];
     $recent_docs = [];
 
     $is_admin = ( stripos( $_SESSION['role'], 'admin' ) !== false );
-    $user_id = $_SESSION['user_id'];
+    $user_id  = $_SESSION['user_id'];
 
-    // SQL สำหรับ Stats
+    // SQL สำหรับ Stats - รวมทั้งหมดในคำสั่งเดียว
     $time_logs['stats_queries'] = microtime( true );
-    $where_clause = $is_admin ? "" : "WHERE created_by = ?";
-    $where_success = $is_admin ? "WHERE current_status = 'Received'" : "WHERE current_status = 'Received' AND created_by = ?";
-    $where_pending = $is_admin ? "WHERE current_status IN ('Registered', 'Sent')" : "WHERE current_status IN ('Registered', 'Sent') AND created_by = ?";
-    $where_late = $is_admin ? "WHERE current_status = 'Late'" : "WHERE current_status = 'Late' AND created_by = ?";
 
-    $params_count = $is_admin ? [] : [$user_id];
+    $sql_stats = "SELECT
+        COUNT(*) as total,
+        SUM(CASE WHEN current_status = 'Received' THEN 1 ELSE 0 END) as success,
+        SUM(CASE WHEN current_status IN ('Registered', 'Sent') THEN 1 ELSE 0 END) as pending,
+        SUM(CASE WHEN current_status = 'Late' THEN 1 ELSE 0 END) as late
+        FROM documents";
 
-    $total_result = CON::selectArrayDB( $params_count, "SELECT COUNT(*) as count FROM documents $where_clause" );
-    $stats['total'] = ( $total_result && count( $total_result ) > 0 ) ? $total_result[0]['count'] : 0;
+    $params_count = [];
+    if ( !$is_admin ) {
+        $sql_stats .= " WHERE created_by = ?";
+        $params_count = [$user_id];
+    }
 
-    $success_result = CON::selectArrayDB( $params_count, "SELECT COUNT(*) as count FROM documents $where_success" );
-    $stats['success'] = ( $success_result && count( $success_result ) > 0 ) ? $success_result[0]['count'] : 0;
-
-    $pending_result = CON::selectArrayDB( $params_count, "SELECT COUNT(*) as count FROM documents $where_pending" );
-    $stats['pending'] = ( $pending_result && count( $pending_result ) > 0 ) ? $pending_result[0]['count'] : 0;
-
-    $late_result = CON::selectArrayDB( $params_count, "SELECT COUNT(*) as count FROM documents $where_late" );
-    $stats['late'] = ( $late_result && count( $late_result ) > 0 ) ? $late_result[0]['count'] : 0;
+    $stats_result = CON::selectArrayDB( $params_count, $sql_stats );
+    if ( $stats_result && count( $stats_result ) > 0 ) {
+        $stats['total']   = (int) ( $stats_result[0]['total'] ?? 0 );
+        $stats['success'] = (int) ( $stats_result[0]['success'] ?? 0 );
+        $stats['pending'] = (int) ( $stats_result[0]['pending'] ?? 0 );
+        $stats['late']    = (int) ( $stats_result[0]['late'] ?? 0 );
+    }
 
     $time_logs['stats_queries'] = microtime( true ) - $time_logs['stats_queries'];
 
     // SQL สำหรับ Recent Docs
     $time_logs['recent_docs_query'] = microtime( true );
-    $sql_recent = "SELECT d.*, dt.type_name FROM documents d LEFT JOIN document_type dt ON d.type_id = dt.type_id";
-    $recent_params = [];
+    $sql_recent                     = "SELECT d.*, dt.type_name FROM documents d LEFT JOIN document_type dt ON d.type_id = dt.type_id";
+    $recent_params                  = [];
     if ( !$is_admin ) {
         $sql_recent .= " WHERE d.created_by = ?";
         $recent_params = [$user_id];
     }
     $sql_recent .= " ORDER BY d.created_at DESC LIMIT 10";
-    $recent_docs = CON::selectArrayDB( $recent_params, $sql_recent ) ?? [];
+    $recent_docs                    = CON::selectArrayDB( $recent_params, $sql_recent ) ?? [];
     $time_logs['recent_docs_query'] = microtime( true ) - $time_logs['recent_docs_query'];
 
     $total_time = microtime( true ) - $start_time;
@@ -78,11 +81,11 @@
     $docsRows = '';
     if ( count( $recent_docs ) > 0 ) {
         foreach ( $recent_docs as $doc ) {
-            $doc_code = htmlspecialchars( $doc['document_code'] ?? '' );
-            $title = htmlspecialchars( $doc['title'] ?? '' );
-            $type_name = htmlspecialchars( $doc['type_name'] ?? '-' );
-            $created_at = date( 'd/m/Y H:i', strtotime( $doc['created_at'] ?? '' ) );
-            $view_count = number_format( $doc['view_count'] ?? 0 );
+            $doc_code     = $doc['document_code'] ?? '';
+            $title        = $doc['title'] ?? '';
+            $type_name    = $doc['type_name'] ?? '-';
+            $created_at   = date( 'd/m/Y H:i', strtotime( $doc['created_at'] ?? '' ) );
+            $view_count   = number_format( $doc['view_count'] ?? 0 );
             $status_badge = getStatusBadge( $doc['current_status'] ?? '' );
 
             $docsRows .= "<tr>
@@ -147,7 +150,7 @@
     </div>
 
     <!-- Cards สรุปยอด -->
-    <h5 class="mb-4 fw-bold text-secondary">**สรุปสถานะประจำวัน** <?php echo $is_admin ? '(ทั้งหมด)' : '(เฉพาะของคุณ)'; ?></h5>
+    <h5 class="mb-4 fw-bold text-secondary">**สรุปสถานะประจำวัน**                                                                                                    <?php echo $is_admin ? '(ทั้งหมด)' : '(เฉพาะของคุณ)'; ?></h5>
     <div class="row mb-5 g-4">
         <div class="col-md-3"><div class="p-4 rounded-5 text-center text-white shadow-sm position-relative overflow-hidden" style="background: linear-gradient(135deg, #4FC3F7, #29B6F6);"><i class="fas fa-folder-open fa-4x position-absolute" style="opacity:0.2; right:-10px; bottom:-10px;"></i><h2 class="fw-bold mb-0"><?php echo number_format( $stats['total'] ); ?></h2><small>เอกสารทั้งหมด</small></div></div>
         <div class="col-md-3"><div class="p-4 rounded-5 text-center text-white shadow-sm" style="background: linear-gradient(135deg, #81C784, #66BB6A);"><i class="fas fa-check-circle fa-4x position-absolute" style="opacity:0.2; right:-10px; bottom:-10px;"></i><h2 class="fw-bold mb-0"><?php echo number_format( $stats['success'] ); ?></h2><small>สำเร็จ</small></div></div>
