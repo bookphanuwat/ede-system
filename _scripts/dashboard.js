@@ -21,6 +21,7 @@ function showQRModal(docCode, docTitle) {
     document.getElementById('modalDocCode').innerText = "รหัส: " + docCode;
     document.getElementById('modalDocTitle').innerText = docTitle;
     document.getElementById('btnPrintLink').href = '../print/' + docCode;
+    document.getElementById('btnPrintLink').target = '_blank';
 
     const qrContainer = document.getElementById("qrcode");
     qrContainer.innerHTML = "";
