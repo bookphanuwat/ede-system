@@ -1,27 +1,9 @@
 <?php
-    require '../vendor/autoload.php';
-
-    use Endroid\QrCode\Builder\Builder;
-    use Endroid\QrCode\Encoding\Encoding;
-    use Endroid\QrCode\Writer\PngWriter;
-
     // รับรหัสเอกสาร
     $doc_code = $_GET['code'] ?? 'EDE-TEST-001';
 
-    // สร้าง QR Code
-    $dataUri = "";
-    try {
-        $result = Builder::create()
-            ->writer( new PngWriter() )
-            ->data( $doc_code )
-            ->encoding( new Encoding( 'UTF-8' ) )
-            ->size( 300 )
-            ->margin( 10 )
-            ->build();
-        $dataUri = $result->getDataUri();
-    } catch ( Exception $e ) {
-        $dataUri = ""; // กรณี Error
-    }
+    // สร้าง QR Code URL จาก QRserver API
+    $qr_url = 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=' . urlencode($doc_code);
 ?>
 
 <!DOCTYPE html>
@@ -209,11 +191,7 @@
         <p style="font-size: 14pt; color: #555;">รหัสอ้างอิงเอกสาร</p>
 
         <div class="qr-box">
-            <?php if ( $dataUri ): ?>
-            <img src="<?php echo $dataUri; ?>" width="350" height="350" alt="QR Code">
-            <?php else: ?>
-            <p style="color:red;">ไม่สามารถสร้าง QR Code ได้</p>
-            <?php endif; ?>
+            <img src="<?php echo $qr_url; ?>" width="350" height="350" alt="QR Code">
         </div>
 
         <div class="divider"></div>
