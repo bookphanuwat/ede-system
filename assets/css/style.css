@@ -1,11 +1,15 @@
+/* 1. โหลดฟอนต์ */
 @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600&display=swap');
 
 :root {
-    --color-dashboard: #29B6F6;
-    --color-register:  #FFB74D;
-    --color-tracking:  #66BB6A;
-    --color-report:    #EF5350;
-    --color-settings:  #7E57C2;
+    --color-dashboard: #29B6F6; /* ฟ้า */
+    --color-register:  #FFB74D; /* ส้ม */
+    --color-tracking:  #66BB6A; /* เขียว */
+    --color-report:    #EF5350; /* แดง */
+    --color-settings:  #7E57C2; /* ม่วง */
+    
+    /* --- สีใหม่สำหรับจัดการสถานะ --- */
+    --color-status:    #FFD740; /* เหลืองทอง (Amber Accent) */
 }
 
 body {
@@ -32,11 +36,19 @@ body {
 .nav-btn:hover { transform: translateY(-2px); color: white; filter: brightness(1.1); }
 .nav-btn i { width: 30px; font-size: 1.2rem; margin-right: 10px; text-align: center; }
 
+/* สีปุ่มเมนู */
 .btn-dashboard { background-color: var(--color-dashboard); }
 .btn-register  { background-color: var(--color-register); color: #fff; }
 .btn-tracking  { background-color: var(--color-tracking); }
 .btn-report    { background-color: var(--color-report); }
 .btn-settings  { background-color: var(--color-settings); }
+
+/* ปุ่มจัดการสถานะ (สีเหลือง ตัวหนังสือสีเข้ม) */
+.btn-status_settings { 
+    background-color: var(--color-status); 
+    color: #444; 
+}
+.btn-status_settings:hover { color: #222; }
 
 /* Layout & Header */
 .content-wrapper { width: 100%; margin-left: 260px; display: flex; flex-direction: column; min-height: 100vh; }
@@ -47,6 +59,8 @@ body {
 .header-tracking  { background-color: var(--color-tracking); }
 .header-report    { background-color: var(--color-report); }
 .header-settings  { background-color: var(--color-settings); }
+.header-status    { background-color: var(--color-status); color: #444 !important; } /* Header สีเหลือง */
+.header-status .text-white { color: #444 !important; } /* ปรับสีตัวอักษรใน Header ให้เข้ม */
 
 .page-content { padding: 40px; background-color: #fff; flex-grow: 1; border-radius: 20px 0 0 0; margin-top: -1px; }
 
@@ -66,7 +80,7 @@ body {
 }
 .timeline-dot.active { background: var(--color-tracking); box-shadow: 0 0 0 1px var(--color-tracking); }
 
-/* --- เพิ่มใหม่: Dropdown Profile --- */
+/* Dropdown Profile */
 .dropdown-menu { border-radius: 15px; border: none; box-shadow: 0 5px 20px rgba(0,0,0,0.1); padding: 10px; }
 .dropdown-item { border-radius: 10px; padding: 8px 15px; transition: 0.2s; }
 .dropdown-item:hover { background-color: #f0f2f5; color: var(--color-dashboard); transform: translateX(5px); }
