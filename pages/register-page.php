@@ -111,3 +111,4 @@ $header_class = "header-register";
     pointer-events: none;
 }
 </style>
+

@@ -1,6 +1,7 @@
 <?php
     session_start();
-    error_reporting( E_ERROR | E_WARNING | E_PARSE );
+    error_reporting( E_ALL );
+    //error_reporting( E_ERROR | E_WARNING | E_PARSE );
 
     // ตรวจสอบการ login
     if ( !isset( $_SESSION['user_id'] ) ) {
