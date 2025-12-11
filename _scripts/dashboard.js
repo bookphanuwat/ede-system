@@ -20,7 +20,7 @@ window.addEventListener('load', function() {
 function showQRModal(docCode, docTitle) {
     document.getElementById('modalDocCode').innerText = "รหัส: " + docCode;
     document.getElementById('modalDocTitle').innerText = docTitle;
-    document.getElementById('btnPrintLink').href = 'print_cover.php?code=' + docCode;
+    document.getElementById('btnPrintLink').href = '../print/' + docCode;
 
     const qrContainer = document.getElementById("qrcode");
     qrContainer.innerHTML = "";

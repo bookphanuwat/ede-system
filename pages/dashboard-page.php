@@ -104,7 +104,7 @@
                 </td>
                 <td>
                     <button onclick=\"showQRModal('$doc_code', '$title')\" class=\"btn btn-sm btn-light border rounded-pill shadow-sm text-dark\"><i class=\"fas fa-qrcode text-success\"></i> QR</button>
-                    <a href=\"print_cover.php?code=$doc_code\" class=\"btn btn-sm btn-light border rounded-circle shadow-sm ms-1\"><i class=\"fas fa-print\"></i></a>
+                    <a target=\"_blank\" href=\"../print/$doc_code\" class=\"btn btn-sm btn-light border rounded-circle shadow-sm ms-1\"><i class=\"fas fa-print\"></i></a>
                 </td>
             </tr>";
         }
@@ -248,7 +248,7 @@
     function showQRModal(docCode, docTitle) {
         document.getElementById('modalDocCode').innerText = "รหัส: " + docCode;
         document.getElementById('modalDocTitle').innerText = docTitle;
-        document.getElementById('btnPrintLink').href = 'print_cover.php?code=' + docCode;
+        document.getElementById('btnPrintLink').href = '../print/' + docCode;
         const qrContainer = document.getElementById("qrcode");
         qrContainer.innerHTML = "";
         new QRCode(qrContainer, { text: docCode, width: 180, height: 180 });

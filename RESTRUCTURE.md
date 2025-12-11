@@ -62,7 +62,7 @@ ede-system/
 ├── index-old.php               # Backup ไฟล์เดิม
 ├── login.php                   # หน้า login (ยังคงเดิม)
 ├── logout.php                  # หน้า logout (ยังคงเดิม)
-├── print_cover.php             # พิมพ์ใบปะหน้า (ยังคงเดิม)
+├── print/             # พิมพ์ใบปะหน้า (ยังคงเดิม)
 ├── _scripts/                   # JavaScript files
 │   ├── global.js
 │   ├── dashboard.js
