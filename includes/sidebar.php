@@ -31,5 +31,9 @@
         <i class="fas fa-cog"></i> ตั้งค่า
     </a>
     <a href="scan_history.php" class="nav-btn btn-settings">
-        <i class="fas fa-history"></i> ประวัติการสแกน</a>
+        <i class="fas fa-history"></i> ประวัติการสแกน
+    </a>
+    <a href="workflow_settings.php" class="nav-btn btn-status_settings">
+    <i class="fas fa-project-diagram"></i> จัดการ สถานะ
+</a>
 </div>
