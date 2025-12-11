@@ -38,7 +38,7 @@
     <link rel="stylesheet" href="<?php echo ASSET_PATH; ?>/select2-bootstrap-5-theme/dist/select2-bootstrap-5-theme.min.css">
     <link rel="stylesheet" href="<?php echo ASSET_PATH; ?>/fonts/maledpan/maledpan.css">
     <link rel="stylesheet" href="<?php echo ASSET_PATH; ?>/fonts/chatthai/chatthai.css">
-    <link href="assets/css/style.css" rel="stylesheet">
+    <link href="<?php echo SITE_URL;?>/css/main.min.css" rel="stylesheet">
 </head>
 
 <body>
