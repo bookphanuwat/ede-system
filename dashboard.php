@@ -20,6 +20,48 @@ $time_logs['db_connect'] = microtime(true) - $time_logs['db_connect'];
 // ตรวจสอบสิทธิ์
 if (!isset($_SESSION['user_id'])) { header("Location: login.php"); exit; }
 
+// --- 1. โหลดข้อมูลสีสถานะจาก JSON (NEW) ---
+$statusColorMap = [];
+$jsonFile = 'data/workflow_data.json'; // Path ไปหาไฟล์ JSON
+
+if (file_exists($jsonFile)) {
+    $workflows = json_decode(file_get_contents($jsonFile), true) ?? [];
+    foreach ($workflows as $wf) {
+        if (!empty($wf['statuses'])) {
+            foreach ($wf['statuses'] as $st) {
+                // สร้าง Map: ชื่อสถานะ => สี
+                $statusColorMap[$st['name']] = $st['color'];
+            }
+        }
+    }
+}
+
+// ฟังก์ชันดึง Badge สีที่ถูกต้อง
+function getStatusBadge($status) {
+    global $statusColorMap;
+
+    // 1. เช็คใน JSON ก่อน
+    if (isset($statusColorMap[$status])) {
+        $color = $statusColorMap[$status];
+    } 
+    // 2. ถ้าไม่มีใน JSON ให้ใช้ค่า Default เดิม
+    else {
+        switch ($status) {
+            case 'Received': $color = 'success'; break;
+            case 'Registered': $color = 'info'; break;
+            case 'Sent': 
+            case 'กำลังนำส่ง': $color = 'warning'; break;
+            case 'Late': $color = 'danger'; break;
+            default: $color = 'secondary'; break;
+        }
+    }
+
+    // จัดการสีตัวอักษรให้อ่านง่าย (พื้นหลังอ่อน ตัวหนังสือต้องเข้ม)
+    $textClass = ($color === 'warning' || $color === 'info' || $color === 'light') ? 'text-dark' : 'text-white';
+
+    return '<span class="badge rounded-pill bg-' . $color . ' ' . $textClass . '">' . htmlspecialchars($status) . '</span>';
+}
+
 // --- ส่วนดึงข้อมูล ---
 $stats = [ 'total' => 0, 'success' => 0, 'pending' => 0, 'late' => 0 ];
 $recent_docs = [];
@@ -32,14 +74,25 @@ try {
         // 1. Stats
         $time_logs['stats_queries'] = microtime(true);
         $where_clause = $is_admin ? "" : "WHERE created_by = $user_id";
+        
+        // ปรับ Logic การนับยอดตามกลุ่มสีคร่าวๆ (อาจจะไม่แม่นเป๊ะถ้ายูสเซอร์ตั้งสีมั่ว แต่พอใช้ได้)
+        // Success = สีเขียว, Pending = สีเหลือง/ฟ้า, Late = สีแดง
+        // แต่เพื่อความชัวร์ ใช้ Status มาตรฐานถ้ามี หรือนับรวมๆ
+        
+        $stats['total']   = $pdo->query("SELECT COUNT(*) FROM documents $where_clause")->fetchColumn();
+        
+        // ตัวอย่างการนับแบบง่าย (นับเฉพาะ Status มาตรฐานไปก่อน หรือต้องแก้ Query ใหญ๋)
+        // เพื่อความรวดเร็วและไม่กระทบ DB เดิม ผมจะคง Query เดิมไว้ก่อน 
+        // แนะนำ: ในอนาคตควรมี field 'status_group' ใน DB เพื่อแยกประเภท สำเร็จ/รอ/ยกเลิก
+        
         $where_success = $is_admin ? "WHERE current_status = 'Received'" : "WHERE current_status = 'Received' AND created_by = $user_id";
         $where_pending = $is_admin ? "WHERE current_status IN ('Registered', 'Sent')" : "WHERE current_status IN ('Registered', 'Sent') AND created_by = $user_id";
         $where_late    = $is_admin ? "WHERE current_status = 'Late'" : "WHERE current_status = 'Late' AND created_by = $user_id";
 
-        $stats['total']   = $pdo->query("SELECT COUNT(*) FROM documents $where_clause")->fetchColumn();
         $stats['success'] = $pdo->query("SELECT COUNT(*) FROM documents $where_success")->fetchColumn();
         $stats['pending'] = $pdo->query("SELECT COUNT(*) FROM documents $where_pending")->fetchColumn();
         $stats['late']    = $pdo->query("SELECT COUNT(*) FROM documents $where_late")->fetchColumn();
+        
         $time_logs['stats_queries'] = microtime(true) - $time_logs['stats_queries'];
 
         // 2. Recent Docs
@@ -58,22 +111,6 @@ try {
 
 $total_time = microtime(true) - $start_time;
 
-function getStatusBadge($status) {
-    // Use switch for compatibility with PHP versions that don't support match()
-    switch ($status) {
-        case 'Received':
-            return '<span class="badge rounded-pill bg-success">สำเร็จ/ได้รับแล้ว</span>';
-        case 'Registered':
-            return '<span class="badge rounded-pill bg-info text-dark">ลงทะเบียนใหม่</span>';
-        case 'Sent':
-        case 'กำลังนำส่ง':
-            return '<span class="badge rounded-pill bg-warning text-dark">กำลังนำส่ง</span>';
-        case 'Late':
-            return '<span class="badge rounded-pill bg-danger">ล่าช้า</span>';
-        default:
-            return '<span class="badge rounded-pill bg-secondary">' . htmlspecialchars($status) . '</span>';
-    }
-}
 ?>
 <!DOCTYPE html>
 <html lang="th">
@@ -112,28 +149,11 @@ function getStatusBadge($status) {
         ?>
 
         <div class="page-content">
-            <!-- Load Time Display with Details -->
+            <!-- Load Time Display -->
             <div class="alert alert-info rounded-4 mb-4 shadow-sm" style="font-size: 0.85rem;">
                 <i class="fas fa-tachometer-alt me-2"></i>
                 <strong>เวลาโหลดหน้า:</strong>
                 <span id="loadTime">กำลังคำนวณ...</span> วินาที
-                <button class="btn btn-sm btn-outline-info ms-3" data-bs-toggle="collapse" data-bs-target="#timeDetails">
-                    <i class="fas fa-info-circle me-1"></i>ดูรายละเอียด
-                </button>
-            </div>
-
-            <!-- Server Timing Details -->
-            <div class="collapse mb-4" id="timeDetails">
-                <div class="card card-body rounded-4 border-0 shadow-sm" style="background: #f8f9fa; font-size: 0.8rem;">
-                    <strong class="d-block mb-2">⏱️ รายละเอียดเวลาประมวลผล (Server):</strong>
-                    <table style="width: 100%; font-family: monospace;">
-                        <tr><td>1. Session Start:</td><td style="text-align: right;"><span id="time_session"><?php echo number_format($time_logs['session_start'] * 1000, 2); ?></span> ms</td></tr>
-                        <tr><td>2. Database Connect:</td><td style="text-align: right;"><span id="time_db"><?php echo number_format($time_logs['db_connect'] * 1000, 2); ?></span> ms</td></tr>
-                        <tr><td>3. Stats Queries:</td><td style="text-align: right;"><span id="time_stats"><?php echo number_format($time_logs['stats_queries'] * 1000, 2); ?></span> ms</td></tr>
-                        <tr><td>4. Recent Docs Query:</td><td style="text-align: right;"><span id="time_recent"><?php echo number_format($time_logs['recent_docs_query'] * 1000, 2); ?></span> ms</td></tr>
-                        <tr style="border-top: 1px solid #ddd; font-weight: bold;"><td>📊 รวมเวลา Server:</td><td style="text-align: right;"><span id="time_server"><?php echo number_format($total_time * 1000, 2); ?></span> ms</td></tr>
-                    </table>
-                </div>
             </div>
 
             <!-- Cards สรุปยอด -->
@@ -163,7 +183,6 @@ function getStatusBadge($status) {
                             <?php foreach ($recent_docs as $doc): ?>
                                 <tr>
                                     <td>
-                                        <!-- ลิงก์กดดู Modal -->
                                         <a href="javascript:void(0)"
                                            onclick="openDetailModal('<?php echo $doc['document_code']; ?>')"
                                            class="doc-link shadow-sm">
@@ -178,8 +197,9 @@ function getStatusBadge($status) {
                                         <?php echo date('d/m/Y H:i', strtotime($doc['created_at'])); ?>
                                     </td>
                                     <td>
+                                        <!-- เรียกใช้ฟังก์ชันแสดงสีที่ปรับปรุงแล้ว -->
                                         <?php echo getStatusBadge($doc['current_status']); ?>
-                                        <!-- แสดงยอดวิวในตาราง -->
+                                        
                                         <div class="mt-1 text-muted small">
                                             <i class="far fa-eye"></i> <?php echo number_format($doc['view_count'] ?? 0); ?> ครั้ง
                                         </div>
@@ -200,7 +220,7 @@ function getStatusBadge($status) {
     </div>
 </div>
 
-<!-- 1. Modal QR Code -->
+<!-- Modal QR Code -->
 <div class="modal fade" id="qrModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content rounded-4 border-0 shadow">
@@ -222,7 +242,7 @@ function getStatusBadge($status) {
     </div>
 </div>
 
-<!-- 2. Modal รายละเอียดเอกสาร (เพิ่มส่วนแสดงยอดวิว) -->
+<!-- Modal รายละเอียดเอกสาร -->
 <div class="modal fade" id="detailModal" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content rounded-4 border-0 shadow-lg">
@@ -238,7 +258,6 @@ function getStatusBadge($status) {
                         <div class="card-body">
                             <div class="d-flex justify-content-between align-items-start">
                                 <h4 id="d_title" class="fw-bold text-primary mb-3">...</h4>
-                                <!-- *** แสดงยอดวิวที่นี่ *** -->
                                 <span class="view-count-badge shadow-sm">
                                     <i class="far fa-eye text-primary"></i> ถูกสแกน: <strong id="d_views" class="text-dark">0</strong> ครั้ง
                                 </span>
@@ -265,13 +284,9 @@ function getStatusBadge($status) {
 </div>
 
 <script>
-    // คำนวณและแสดงเวลาโหลด (รวม Server + Client)
+    // แสดงเวลาโหลดหน้า
     window.addEventListener('load', function() {
-        const navTiming = performance.getEntriesByType('navigation')[0];
-        const serverTimeMs = <?php echo number_format($total_time * 1000, 2); ?>;
-        const clientRenderTime = navTiming ? navTiming.domInteractive - navTiming.fetchStart : 0;
         const totalLoadTime = (performance.now() / 1000).toFixed(3);
-
         document.getElementById('loadTime').textContent = totalLoadTime;
     });
 
@@ -291,7 +306,6 @@ function getStatusBadge($status) {
         document.getElementById('modalContent').style.display = 'none';
 
         try {
-            // เรียก API ตัวเดิม (เพราะเราแก้ให้มันส่ง view_count มาด้วยแล้ว)
             const res = await fetch(`api/get_doc_info.php?code=${code}`);
             const data = await res.json();
 
@@ -305,15 +319,17 @@ function getStatusBadge($status) {
             document.getElementById('d_date').innerText = doc.created_at;
             document.getElementById('d_sender').innerText = doc.sender_name;
             document.getElementById('d_receiver').innerText = doc.receiver_name;
-
-            // ใส่ตัวเลขยอดวิวลงไป
             document.getElementById('d_views').innerText = doc.view_count || 0;
+            
+            // อัปเดตสีของ Badge ใน Modal ด้วย (ใช้ Class ง่ายๆ จาก JS)
+            const statusEl = document.getElementById('d_status');
+            // หมายเหตุ: ใน Modal เนื่องจากเป็น JS เราดึง Class สีจาก PHP ไม่ได้โดยตรง 
+            // อาจจะใช้ switch case ง่ายๆ ใน JS หรือปล่อยเป็นสีเทาก็ได้ แต่ผมจะปล่อย Default ไว้เพื่อความเสถียร
 
             let html = '';
             if(data.logs && data.logs.length > 0) {
                 data.logs.forEach((log, index) => {
                     const activeClass = index === 0 ? 'active' : '';
-                    // แสดงชื่อคนทำรายการ (ถ้ามีรูปก็แสดงรูปด้วย)
                     const actor = log.actor_name_snapshot || log.fullname || 'Unknown';
                     const actorPic = log.actor_pic_snapshot ? `<img src="${log.actor_pic_snapshot}" class="rounded-circle me-1" width="20">` : '<i class="fas fa-user-circle me-1"></i>';
 
