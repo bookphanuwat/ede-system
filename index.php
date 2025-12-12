@@ -40,12 +40,22 @@
     <!-- <link rel="stylesheet" href="<?php echo ASSET_PATH; ?>/fonts/maledpan/maledpan.css">
     <link rel="stylesheet" href="<?php echo ASSET_PATH; ?>/fonts/chatthai/chatthai.css"> -->
     <link href="<?php echo SITE_URL;?>/css/main.min.css" rel="stylesheet">
+    <script src="https://unpkg.com/vconsole@latest/dist/vconsole.min.js"></script>
+<script>
+  // VConsole will be exported to `window.VConsole` by default.
+  var vConsole = new window.VConsole();
+</script>
 </head>
 
 <body>
 
     <div class="d-flex">
-        <?php include 'includes/sidebar.php'; ?>
+        <?php 
+        if ( $GET_DEV !== 'liffscan' ) {
+            include 'includes/sidebar.php'; 
+        }
+        ?>
+        
 
         <div class="content-wrapper">
 
@@ -92,6 +102,11 @@
 
                     case 'workflow-settings':
                         $pageFile = 'pages/workflow-settings-page.php';
+                        break;                    
+                    
+                    case 'liffscan':
+                        $pageFile = 'pages/liff-scan.php';
+                        $jsReq = 'js/liffscan.min.js';
                         break;
 
                     default:
@@ -113,7 +128,10 @@
     </script>
     <!-- <script src="<?php echo ASSET_PATH; ?>/jquery/dist/jquery.min.js"></script> -->
     <script src="<?php echo ASSET_PATH; ?>/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="<?php echo ASSET_PATH; ?>/sweetalert2/dist/sweetalert2.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
 
     <!-- Global Scripts -->
     <script src="<?php echo SITE_URL; ?>/js/global.min.js?v=<?php echo filemtime( 'js/global.min.js' ); ?>"></script>

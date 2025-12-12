@@ -1,7 +1,7 @@
 
 <?php
     $page_title   = "จัดการสถานะ";
-    $header_class = "header-status_settings";
+    $header_class = "header-status";
     include 'includes/topbar.php';
 ?>
 
@@ -120,7 +120,7 @@
 </style>
 
 <script>
-    const API_URL = 'api/manage_workflow.php';
+    const API_URL = '../api/manage_workflow.php';
     let workflowData = [];
 
     document.addEventListener('DOMContentLoaded', loadWorkflows);

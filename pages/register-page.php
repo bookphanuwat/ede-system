@@ -29,7 +29,7 @@
 <div class="page-content">
     <h5 class="mb-4 fw-bold text-secondary">**ลงทะเบียนเอกสารใหม่**</h5>
 
-    <form action="api/save_document.php" method="POST" class="mx-auto" style="max-width: 900px;" id="registerForm">
+    <form action="../api/save_document.php" method="POST" class="mx-auto" style="max-width: 900px;" id="registerForm">
         <input type="hidden" name="created_by" value="<?php echo $_SESSION['user_id'] ?? 1; ?>">
         <input type="hidden" name="current_status" id="initialStatusInput" value="">
         <input type="hidden" name="workflow_id" id="workflowIdInput" value="">
@@ -108,7 +108,7 @@
 </div>
 
 <script>
-    const API_URL = 'api/manage_workflow.php';
+    const API_URL = '../api/manage_workflow.php';
     const CURRENT_USER_ID = "<?php echo $_SESSION['user_id'] ?? ''; ?>";
     let allWorkflows = [];
 
