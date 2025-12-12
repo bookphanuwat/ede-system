@@ -4,7 +4,7 @@
     //error_reporting( E_ERROR | E_WARNING | E_PARSE );
 
     // ตรวจสอบการ login
-    if ( !isset( $_SESSION['user_id'] ) ) {
+    if ( !isset( $_SESSION['user_id'] ) && $_GET['dev'] != 'liffscan' ) {
         header( "Location: login.php" );
         exit;
     }
@@ -50,12 +50,12 @@
 <body>
 
     <div class="d-flex">
-        <?php 
+        <?php
         if ( $GET_DEV !== 'liffscan' ) {
-            include 'includes/sidebar.php'; 
+            include 'includes/sidebar.php';
         }
         ?>
-        
+
 
         <div class="content-wrapper">
 
@@ -102,8 +102,8 @@
 
                     case 'workflow-settings':
                         $pageFile = 'pages/workflow-settings-page.php';
-                        break;                    
-                    
+                        break;
+
                     case 'liffscan':
                         $pageFile = 'pages/liff-scan.php';
                         $jsReq = 'js/liffscan.min.js';
