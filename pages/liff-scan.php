@@ -1,3 +1,14 @@
+<style>
+    /* Fix: ปรับ z-index ให้ detailOverlay อยู่ต่ำกว่า Modal */
+    #detailOverlay {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: white; z-index: 1040; overflow-y: auto;
+    }
+    /* Fix: บังคับให้ Modal และ Backdrop ของ Bootstrap อยู่เหนือ Overlay */
+    .modal-backdrop { z-index: 1050 !important; }
+    .modal { z-index: 1060 !important; }
+</style>
+
 <div class="d-flex justify-content-center w-100">
     <div class="col-md-5 col-sm-8 col-12">
         
