@@ -47,7 +47,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmtLog->execute([$document_id, $initial_status, $created_by]);
 
         // 5. ส่งไปหน้าพิมพ์
-        header("Location: ../../print/" . $document_code);
+        // ระบุ /ชื่อโปรเจกต์/print/รหัสเอกสาร/
+        header("Location: /ede-system/print/" . $document_code . "/");
         exit;
 
     } catch (Exception $e) {
