@@ -131,7 +131,7 @@
     <script src="<?php echo ASSET_PATH; ?>/sweetalert2/dist/sweetalert2.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+
 
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
 

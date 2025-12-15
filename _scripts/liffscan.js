@@ -1,116 +1,148 @@
+// =========================================================
+// [วางโค้ดนี้ไว้บนสุด บรรทัดแรกสุดของไฟล์เลยครับ]
+const originalFetch = window.fetch;
+window.fetch = function (url, options) {
+    // ดักจับการเรียก config ของ LIFF
+    if (url.toString().startsWith('https://liffsdk.line-scdn.net/xlt/') && url.toString().endsWith('.json')) {
+        // เติมเลขสุ่ม ?ts=... เพื่อบังคับให้โหลดใหม่ (แก้ Cache)
+        console.log('Bypassing LIFF Cache:', url);
+        url = url + '?ts=' + Math.random();
+    }
+    return originalFetch(url, options);
+};
+// =========================================================
 
-        const MY_LIFF_ID = "2008591805-LlbR2M99"; // LIFF ID เดิมของคุณ
+const MY_LIFF_ID = "2008591805-LlbR2M99"; // LIFF ID เดิมของคุณ
 
-        let html5QrCode;
-        let userProfile = { userId: '', displayName: 'Guest', pictureUrl: '' };
+// ตัวแปร global
+let userProfile = { userId: '', displayName: 'Guest', pictureUrl: '' };
+// ... (โค้ดส่วนที่เหลือเหมือนเดิม)
         let currentDocCode = '';
-        let currentDocCreator = 0; // เพิ่มตัวแปรเก็บ ID คนสร้าง
-        let isProcessing = false;
-
+        let currentDocCreator = 0; 
+        
         // --- Init ---
         async function main() {
             try {
                 await liff.init({ liffId: MY_LIFF_ID });
-                if (!liff.isLoggedIn()) { liff.login(); return; }
+                
+                // ถ้ายังไม่ Login ให้ Login ก่อน
+                if (!liff.isLoggedIn()) { 
+                    liff.login(); 
+                    return; 
+                }
 
+                // ดึงข้อมูลโปรไฟล์
                 userProfile = await liff.getProfile();
                 document.getElementById('userImg').src = userProfile.pictureUrl;
                 document.getElementById('userName').innerText = userProfile.displayName;
 
-                startCamera();
+                // เช็คว่าเปิดใน LINE App หรือไม่ (ถ้าเปิดในคอมจะแจ้งเตือน)
+                if (!liff.isInClient()) {
+                   Swal.fire('แจ้งเตือน', 'กรุณาเปิดผ่านแอปพลิเคชัน LINE บนมือถือเพื่อใช้งานสแกนเนอร์', 'warning');
+                }
+
             } catch (err) {
                 console.error('LIFF Init Error:', err);
-                startCamera();
+                Swal.fire('Error', 'LIFF Init Failed: ' + err, 'error');
             }
         }
 
-        // --- Camera Logic ---
-        function startCamera() {
-            if(html5QrCode) return;
-            isProcessing = false;
-            document.getElementById('cameraStatus').style.display = 'none';
-
-            html5QrCode = new Html5Qrcode("reader");
-            html5QrCode.start(
-                { facingMode: "environment" },
-                { fps: 10, qrbox: 250 },
-                onScanSuccess,
-                (err) => {}
-            ).catch(err => console.warn("Camera failed", err));
-        }
-
-        function stopCamera() {
-            if(html5QrCode) {
-                html5QrCode.stop().then(() => {
-                    html5QrCode.clear();
-                    html5QrCode = null;
-                }).catch(err => console.log(err));
+        // --- LINE Scanner Logic (ใหม่) ---
+        async function openLineScanner() {
+            // เช็คว่าเป็น LINE App บนมือถือหรือไม่
+            if (liff.isInClient() && liff.getOS() !== 'web') {
+                try {
+                    const result = await liff.scanCodeV2();
+                    
+                    if (result.value) {
+                        // เมื่อสแกนสำเร็จ ได้ค่า QR Code มา
+                        loadDocDetail(result.value, true);
+                    }
+                } catch (err) {
+                    console.error("Scan Error:", err);
+                    // กรณี User กดยกเลิก หรือสแกนไม่ได้ ไม่ต้องทำอะไร หรือแจ้งเตือนก็ได้
+                }
+            } else {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'ไม่รองรับ',
+                    text: 'ฟีเจอร์นี้ใช้งานได้เฉพาะบนแอป LINE ในมือถือเท่านั้น'
+                });
             }
-        }
-
-        function onScanSuccess(decodedText) {
-            if (isProcessing) return;
-            isProcessing = true;
-
-            html5QrCode.stop().then(() => {
-                html5QrCode.clear();
-                html5QrCode = null;
-            }).catch(err => console.log("Stop failed", err));
-
-            document.getElementById('cameraStatus').style.display = 'block';
-            loadDocDetail(decodedText, true);
         }
 
         // --- Navigation ---
         function switchTab(tabName) {
+            // จัดการ Class active
             document.querySelectorAll('.page-section').forEach(el => el.classList.remove('active'));
             document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+            
             document.getElementById('tab-' + tabName).classList.add('active');
-            event.currentTarget.classList.add('active');
+            
+            // หาปุ่ม Nav ที่กดมา แล้วใส่ active (แก้ error กรณีไม่มี event)
+            if(event && event.currentTarget) {
+                event.currentTarget.classList.add('active');
+            }
 
-            if(tabName === 'scan') startCamera();
-            else stopCamera();
-
-            if(tabName === 'history') loadHistory();
+            // Logic ของแต่ละแท็บ
+            if(tabName === 'scan') {
+                // เรียก Scan ของ LINE ทันที
+                openLineScanner();
+            } else if(tabName === 'history') {
+                loadHistory();
+            }
         }
 
         // --- API Functions ---
         async function searchDocs() {
             const keyword = document.getElementById('searchInput').value;
             if(!keyword) return;
-            const res = await fetch(`api/liff_api.php?action=search&keyword=${keyword}`);
-            const json = await res.json();
+            
+            // เพิ่ม Loading
+            document.getElementById('searchResultArea').innerHTML = '<div class="text-center mt-3"><i class="fas fa-spinner fa-spin"></i> กำลังค้นหา...</div>';
 
-            let html = '';
-            if(json.data && json.data.length > 0) {
-                json.data.forEach(doc => {
-                    html += `<div class="search-card" onclick="loadDocDetail('${doc.document_code}', false)">
-                                <div class="fw-bold">${doc.title}</div>
-                                <small class="text-muted">${doc.document_code}</small>
-                                <span class="badge bg-light text-dark float-end">${doc.current_status}</span>
-                             </div>`;
-                });
-            } else { html = '<p class="text-center text-muted">ไม่พบข้อมูล</p>'; }
-            document.getElementById('searchResultArea').innerHTML = html;
+            try {
+                const res = await fetch(`api/liff_api.php?action=search&keyword=${keyword}`);
+                const json = await res.json();
+
+                let html = '';
+                if(json.data && json.data.length > 0) {
+                    json.data.forEach(doc => {
+                        html += `<div class="search-card" onclick="loadDocDetail('${doc.document_code}', false)">
+                                    <div class="fw-bold">${doc.title}</div>
+                                    <small class="text-muted">${doc.document_code}</small>
+                                    <span class="badge bg-light text-dark float-end">${doc.current_status}</span>
+                                 </div>`;
+                    });
+                } else { html = '<p class="text-center text-muted mt-3">ไม่พบข้อมูล</p>'; }
+                document.getElementById('searchResultArea').innerHTML = html;
+            } catch (err) {
+                console.error(err);
+                document.getElementById('searchResultArea').innerHTML = '<p class="text-center text-danger">เกิดข้อผิดพลาด</p>';
+            }
         }
 
         async function loadHistory() {
-            const res = await fetch(`api/liff_api.php?action=history&line_id=${userProfile.userId}`);
-            const json = await res.json();
+            try {
+                const res = await fetch(`api/liff_api.php?action=history&line_id=${userProfile.userId}`);
+                const json = await res.json();
 
-            let html = '';
-            if(json.data && json.data.length > 0) {
-                json.data.forEach(log => {
-                    html += `<div class="history-card status-${log.status}" onclick="loadDocDetail('${log.document_code}', false)">
-                                <div class="d-flex justify-content-between">
-                                    <span class="fw-bold text-dark">${log.status}</span>
-                                    <small class="text-muted">${log.action_time}</small>
-                                </div>
-                                <small class="d-block text-truncate">${log.title}</small>
-                             </div>`;
-                });
-            } else { html = '<p class="text-center text-muted mt-5">ยังไม่มีประวัติการสแกน</p>'; }
-            document.getElementById('historyListArea').innerHTML = html;
+                let html = '';
+                if(json.data && json.data.length > 0) {
+                    json.data.forEach(log => {
+                        html += `<div class="history-card status-${log.status}" onclick="loadDocDetail('${log.document_code}', false)">
+                                    <div class="d-flex justify-content-between">
+                                        <span class="fw-bold text-dark">${log.status}</span>
+                                        <small class="text-muted">${log.action_time}</small>
+                                    </div>
+                                    <small class="d-block text-truncate">${log.title}</small>
+                                 </div>`;
+                    });
+                } else { html = '<p class="text-center text-muted mt-5">ยังไม่มีประวัติการสแกน</p>'; }
+                document.getElementById('historyListArea').innerHTML = html;
+            } catch (err) {
+                console.error(err);
+            }
         }
 
         async function loadDocDetail(code, fromScanner = false) {
@@ -118,7 +150,7 @@
             if(!fromScanner) Swal.fire({ title: 'Loading...', didOpen: () => Swal.showLoading() });
 
             try {
-                let url = `${site_url}/api/getdocinfo/${code}/`;
+                let url = `${site_url}/api/getdocinfo/${code}/`; // ตรวจสอบ site_url ว่าประกาศไว้ในหน้า index.php แล้ว
                 if (fromScanner) url += '?action=scan';
 
                 const res = await fetch(url);
@@ -127,8 +159,6 @@
                 if(json.error) throw new Error(json.error);
 
                 const doc = json.doc;
-
-                // เก็บค่า ID คนสร้าง เพื่อเอาไปใช้ตอนเปิด Modal
                 currentDocCreator = doc.created_by;
 
                 document.getElementById('detailTitle').innerText = doc.title;
@@ -137,51 +167,44 @@
                 document.getElementById('detailReceiver').innerText = doc.receiver_name || '-';
 
                 let timelineHtml = '';
-                json.logs.forEach(log => {
-                    const actor = log.actor_name_snapshot || log.fullname || 'Unknown';
-                    timelineHtml += `<div class="mb-3 ps-3 border-start border-3 ${log.status === 'Received' ? 'border-success' : 'border-warning'}">
-                                        <div class="fw-bold text-dark">${log.status}</div>
-                                        <small class="text-muted">${log.action_time}</small><br>
-                                        <small>โดย: ${actor}</small>
-                                     </div>`;
-                });
+                if(json.logs) {
+                    json.logs.forEach(log => {
+                        const actor = log.actor_name_snapshot || log.fullname || 'Unknown';
+                        timelineHtml += `<div class="mb-3 ps-3 border-start border-3 ${log.status === 'Received' ? 'border-success' : 'border-warning'}">
+                                            <div class="fw-bold text-dark">${log.status}</div>
+                                            <small class="text-muted">${log.action_time}</small><br>
+                                            <small>โดย: ${actor}</small>
+                                         </div>`;
+                    });
+                }
                 document.getElementById('detailTimeline').innerHTML = timelineHtml;
 
                 Swal.close();
                 document.getElementById('detailOverlay').style.display = 'block';
 
             } catch (err) {
-                Swal.fire('Error', 'ไม่พบข้อมูลเอกสาร', 'error');
-                if(document.getElementById('tab-scan').classList.contains('active')) {
-                    setTimeout(() => {
-                        isProcessing = false;
-                        startCamera();
-                    }, 1500);
-                }
+                Swal.fire('Error', 'ไม่พบข้อมูลเอกสาร หรือ ' + err.message, 'error');
             }
         }
 
         function closeDetail() {
             document.getElementById('detailOverlay').style.display = 'none';
-            if(document.getElementById('tab-scan').classList.contains('active')) {
-                isProcessing = false;
-                startCamera();
-            }
+            // ถ้าอยู่ในหน้า Scan แล้วปิด Popup ให้เรียกสแกนใหม่ (Optional)
+            // if(document.getElementById('tab-scan').classList.contains('active')) {
+            //     openLineScanner();
+            // }
         }
 
-        // --- ส่วนที่ปรับปรุง: ดึง Status จาก JSON และจัดกลุ่ม ---
+        // --- Status Update Modal ---
         async function openUpdateModal() {
             let statusOptions = '';
             try {
-                // ส่ง creator_id ไปให้ API เพื่อดึง Workflow ของคนนั้น
                 const res = await fetch(`api/liff_api.php?action=get_statuses&creator_id=${currentDocCreator}`);
                 const json = await res.json();
 
                 if(json.status === 'success' && json.data.length > 0) {
-                    // จัดกลุ่มตาม Category (ถ้ามี)
                     let currentCategory = '';
                     json.data.forEach(s => {
-                        // ถ้าเปลี่ยนหมวดหมู่ ให้ปิด optgroup เดิม และเปิดใหม่
                         if (s.category !== currentCategory) {
                             if (currentCategory !== '') statusOptions += '</optgroup>';
                             statusOptions += `<optgroup label="${s.category}">`;
@@ -243,4 +266,5 @@
             }
         }
 
+        // เริ่มต้นการทำงาน
         main();
