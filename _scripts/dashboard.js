@@ -20,7 +20,8 @@ window.addEventListener('load', function() {
 function showQRModal(docCode, docTitle) {
     document.getElementById('modalDocCode').innerText = "รหัส: " + docCode;
     document.getElementById('modalDocTitle').innerText = docTitle;
-    document.getElementById('btnPrintLink').href = 'print_cover.php?code=' + docCode;
+    document.getElementById('btnPrintLink').href = '../print/' + docCode;
+    document.getElementById('btnPrintLink').target = '_blank';
 
     const qrContainer = document.getElementById("qrcode");
     qrContainer.innerHTML = "";
@@ -49,7 +50,7 @@ async function openDetailModal(code) {
 
     try {
         // เรียก API เพื่อดึงข้อมูลเอกสาร
-        const res = await fetch(`api/get_doc_info.php?code=${code}`);
+        const res = await fetch(`${site_url}/api/getdocinfo/${code}/`);
         const data = await res.json();
 
         if(data.error) throw new Error(data.error);
