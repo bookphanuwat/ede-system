@@ -172,9 +172,9 @@
 
     <!-- ปุ่มควบคุม (จะไม่แสดงตอนพิมพ์) -->
     <div class="action-bar">
-        <button onclick="window.location.href='../pages/register-page.php" class="btn btn-back">
-    <i class="fas fa-arrow-left" style="margin-right:8px;"></i> ย้อนกลับ
-</button>
+        <button onclick="history.back()" class="btn btn-back">
+            <i class="fas fa-arrow-left" style="margin-right:8px;"></i> ย้อนกลับ
+        </button>
         <button onclick="window.print()" class="btn btn-print">
             <i class="fas fa-print" style="margin-right:8px;"></i> สั่งพิมพ์หน้านี้
         </button>
