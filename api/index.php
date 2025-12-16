@@ -10,6 +10,179 @@ header( 'Content-Type: application/json; charset=utf-8' );
 header( "Access-Control-Allow-Origin: *" );
 header( 'Access-Control-Allow-Methods:  POST, GET' );
 
+/**
+ * ============================================================================
+ * EDE System - API Gateway
+ * ============================================================================
+ * ไฟล์: api/index.php
+ * วันที่: 2025-12-16
+ *
+ * อธิบาย:
+ * ไฟล์นี้ทำหน้าที่เป็น API Gateway สำหรับติดต่อระหว่าง Frontend (JavaScript)
+ * กับ Database Backend ของระบบ EDE System ช่วยอำนวยความสะดวกในการส่งข้อมูล
+ * และรับผลลัพธ์ในรูปแบบ JSON format
+ *
+ * ============================================================================
+ * โครงสร้างปัจจุบัน:
+ * ============================================================================
+ * 1. Router Pattern: ใช้ Query Parameter 'dev' เพื่อระบุ action ที่ต้องการ
+ *    - getdocinfo     : ดึงข้อมูลเอกสาร พร้อมประวัติสถานะ
+ *    - get_statuses   : ดึงรายการสถานะจากไฟล์ workflow_data.json
+ *    - search         : ค้นหาเอกสารตามคำค้นหา
+ *    - history        : ดึงข้อมูลประวัติการทำงาน
+ *    - manage-workflow: จัดการสถานะและหมวดหมู่เอกสาร
+ *
+ * 2. Response Format: ทั้งหมดส่งกลับเป็น JSON object ที่มีโครงสร้าง:
+ *    {
+ *      "status": "success|error",
+ *      "data": [...],      // ข้อมูลผลลัพธ์
+ *      "message": "..."    // ข้อความบอกข้อผิดพลาด (ถ้ามี)
+ *    }
+ *
+ * ============================================================================
+ * ตัวแปรและ Query Parameters ที่สำคัญ:
+ * ============================================================================
+ *
+ * GET Parameters (Query String):
+ * ─────────────────────────────────
+ * - dev (required):
+ *   รหัส action ที่ต้องการ (alphanumeric only) เช่น "getdocinfo", "search"
+ *
+ * - code (สำหรับ getdocinfo):
+ *   รหัสเอกสาร (alphanumeric only, max 50 characters)
+ *
+ * - action (สำหรับ getdocinfo):
+ *   รูปแบบการดำเนินการ เช่น "scan" - ถ้าระบุจะบวกยอดการดู (+1)
+ *
+ * - keyword (สำหรับ search):
+ *   คำค้นหาในฐานข้อมูล (string)
+ *
+ * - creator_id (สำหรับ get_statuses):
+ *   ID ของผู้สร้าง workflow (int) - ใช้กรองสถานะตามเจ้าของ
+ *
+ * - line_id (สำหรับ history):
+ *   LINE User ID เพื่อค้นหาประวัติของคนนั้นๆ (string)
+ *
+ * POST/REQUEST Parameters (สำหรับ manage-workflow):
+ * ────────────────────────────────────────────────
+ * - action:          ประเภทการดำเนินการ (list, add_category, edit_category,
+ *                    delete_category, add_status, edit_status, delete_status,
+ *                    reorder_status)
+ * - user_id:         รหัสผู้ใช้ปัจจุบัน (int)
+ * - category_name:   ชื่อหมวดหมู่ (สำหรับ add/edit_category)
+ * - category_id:     รหัสหมวดหมู่ (สำหรับ manage statuses)
+ * - status_name:     ชื่อสถานะ (สำหรับ add/edit_status)
+ * - color_class:     สีของสถานะ - HEX color (สำหรับ add/edit_status)
+ * - status_id:       รหัสสถานะ (สำหรับ edit/delete_status)
+ * - sorted_ids:      JSON array ของ status IDs สำหรับเรียงลำดับ
+ *
+ * ============================================================================
+ * เรื่อง mod_rewrite และไฟล์ .htaccess:
+ * ============================================================================
+ * ไฟล์นี้ ต้องอยู่ในโฟลเดอร์ /api/ เพื่อทำให้ routing ทำงานได้ถูกต้อง
+ *
+ * .htaccess ของ api/ ควรมีการตั้งค่า mod_rewrite เพื่อ:
+ * - อนุญาตให้ request ทั้ง POST และ GET ผ่านเข้ามา
+ * - Route ทั้งหมดไปยัง index.php เพื่อให้ Router จัดการ
+ *
+ * ตัวอย่าง .htaccess:
+ * ─────────────────
+ * <IfModule mod_rewrite.c>
+ *     RewriteEngine On
+ *     RewriteBase /api/
+ *
+ *     # ถ้าไฟล์หรือโฟลเดอร์มีอยู่จริง ให้ bypass
+ *     RewriteCond %{REQUEST_FILENAME} !-f
+ *     RewriteCond %{REQUEST_FILENAME} !-d
+ *
+ *     # ส่งทุกคำขอไปยัง index.php พร้อมต้นฉบับ URI
+ *     RewriteRule ^(.*)$ index.php [QSA,L]
+ * </IfModule>
+ *
+ * ============================================================================
+ * ข้อจำกัดและแนวทางการใช้งาน:
+ * ============================================================================
+ *
+ * 1. ประเภทข้อมูลที่ส่ง:
+ *    - GET/POST Parameters: ส่งเป็น Query String หรือ Form Data เท่านั้น
+ *    - JSON Body: ไม่รองรับ ต้องใช้ $_GET หรือ $_POST แทน
+ *    - File Upload: ไม่รองรับในไฟล์นี้
+ *
+ * 2. ข้อมูลที่ส่งกลับ:
+ *    - ทั้งหมดเป็น JSON format ด้วย UTF-8 encoding
+ *    - CORS headers ตั้งค่าอนุญาตให้ทุก origin เข้าถึง (Access-Control-Allow-Origin: *)
+ *    - HTTP Status Codes: 200 (OK), 400 (Bad Request), 404 (Not Found)
+ *
+ * 3. ข้อจำกัด Security:
+ *    - ข้อมูล GET/POST ต้องผ่าน sanitizeGetParam() และ sanitizePostParam()
+ *    - ตัวแปร 'dev' รับเฉพาะ alphanumeric เท่านั้น (ป้องกัน SQL Injection)
+ *    - ค่าฟังก์ชัน 'action' ต้องตรวจสอบค่าที่กำหนดไว้เท่านั้น
+ *
+ * 4. ข้อจำกัด Performance:
+ *    - ค้นหา (search) จำกัดผลลัพธ์ไว้ 10 รายการต่อครั้ง
+ *    - ประวัติ (history) จำกัดไว้ 50 รายการต่อครั้ง
+ *    - JSON workflows ควรจัดการขนาดไฟล์ที่สมเหตุสมผล
+ *
+ * 5. การใช้งาน Session:
+ *    - ต้อง session_start() เสมอ เพื่อเข้าถึง $_SESSION['user_id']
+ *    - ข้อมูล $_SESSION['user_id'] ใช้สำหรับตัดสิน owner ของ workflow
+ *
+ * ============================================================================
+ * ตัวอย่างการเรียก API:
+ * ============================================================================
+ *
+ * หมายเหตุ: .htaccess มีการกำหนด RewriteRule เฉพาะเจาะจงสำหรับ URL patterns:
+ *
+ * RewriteRule 1: ^([0-9a-z-]+)/([A-Z]+-[0-9]+-[A-Z0-9]+)/?$
+ *   => /getdocinfo/EDE-20251210-C565A83/ => ?dev=getdocinfo&code=EDE-20251210-C565A83
+ *
+ * RewriteRule 2: ^([a-z]+)/([A-Za-z0-9]+)/?$
+ *   => /history/Uf3c4379f5b7fbd713116ddebf55010f2 => ?dev=history&code=Uf3c4379f5b7fbd713116ddebf55010f2
+ *
+ * RewriteRule 3: ^([A-Z]+-[0-9]+-[A-Z0-9]+)/?$
+ *   => /EDE-20251210-C565A83/ => ?code=EDE-20251210-C565A83
+ *
+ * RewriteRule 4: ^([0-9a-z-]+)/?$
+ *   => /assets-import-csv/ => ?dev=assets-import-csv
+ *
+ * ─────────────────────────────────────────────────────────────────
+ *
+ * ตัวอย่างการเรียก API ตามข้อแม่แบบ:
+ * ─────────────────────────────────────────────────────────────────
+ *
+ * 1. ดึงข้อมูลเอกสาร (Pattern: /dev/CODE):
+ *    GET /api/getdocinfo/EDE-20251210-C565A83/
+ *    GET /api/getdocinfo/EDE-20251210-C565A83/?action=scan
+ *    (ต้องมี action parameter เพิ่มเติมใน query string)
+ *
+ * 2. ดึงประวัติการทำงาน (Pattern: /dev/ID):
+ *    GET /api/history/
+ *    GET /api/history/Uf3c4379f5b7fbd713116ddebf55010f2
+ *    GET /api/history/Uf3c4379f5b7fbd713116ddebf55010f2/?line_id=Uf3c4379f5b7fbd713116ddebf55010f2
+ *
+ * 3. ค้นหาเอกสาร (Pattern: /dev?keyword=...):
+ *    GET /api/search/?keyword=ใบส่งสินค้า
+ *
+ * 4. ดึงรายการสถานะ (Pattern: /dev?creator_id=...):
+ *    GET /api/get_statuses/?creator_id=5
+ *
+ * 5. จัดการ Workflow (Pattern: /dev):
+ *    POST /api/manage-workflow/
+ *    POST data: action=list&user_id=5
+ *
+ *    POST /api/manage-workflow/?action=add_category
+ *    POST data: category_name=ชื่อหมวด
+ *
+ *    POST /api/manage-workflow/?action=add_status
+ *    POST data: category_id=cat_123&status_name=อนุมัติแล้ว&color_class=#28a745
+ *
+ * 6. ระบุรหัสเอกสารโดยตรง (Pattern: /CODE):
+ *    GET /api/EDE-20251210-C565A83/
+ *    (ต้องส่งเพิ่ม ?dev=getdocinfo ถ้าต้องการ action อื่น)
+ *
+ * ============================================================================
+ */
+
 require realpath( '../../dv-config.php' );
 require DEV_PATH . '/classes/db.class.v2.php';
 require DEV_PATH . '/functions/global.php';
@@ -24,7 +197,7 @@ switch ( $GET_DEV ) {
     case 'getdocinfo':
         $doc_code = sanitizeGetParam( 'code', 'alphanumeric', '' );
         $action   = sanitizeGetParam( 'action', 'alphanumeric', '' );
-        
+
 
         if ( empty( $doc_code ) ) {
             http_response_code( 400 );
@@ -71,24 +244,24 @@ switch ( $GET_DEV ) {
      case 'get_statuses':
         // 1. รับค่า creator_id ผ่านฟังก์ชัน sanitize (ปลอดภัยกว่า $_GET โดยตรง)
         // กำหนด default เป็น 0 ถ้าไม่ส่งมา
-        $creator_id = sanitizeGetParam('creator_id', 'int', 0); 
+        $creator_id = sanitizeGetParam('creator_id', 'int', 0);
 
-        // 2. กำหนด Path ไฟล์ JSON 
+        // 2. กำหนด Path ไฟล์ JSON
         // __DIR__ คือโฟลเดอร์ปัจจุบัน (api) ถอยกลับไป 1 ขั้น (..) แล้วเข้า data
-        $jsonFile = __DIR__ . '/../data/workflow_data.json'; 
-        
+        $jsonFile = __DIR__ . '/../data/workflow_data.json';
+
         $statuses = [];
 
         if (file_exists($jsonFile)) {
             $jsonContent = file_get_contents($jsonFile);
             $workflows = json_decode($jsonContent, true) ?? [];
-            
+
             // 3. วนลูปหาหมวดหมู่
             foreach ($workflows as $wf) {
                 // กรองเฉพาะ Workflow ของ Creator คนนี้ (หรือของคนที่ ID=0/Null ถ้าเป็นระบบกลาง)
                 // หมายเหตุ: ต้องแก้ตรงนี้ให้ยืดหยุ่น ถ้า workflow ไม่ระบุ created_by ให้ถือว่าเป็นของทุกคน
                 $wfCreator = $wf['created_by'] ?? 0;
-                
+
                 if ($wfCreator == $creator_id || $wfCreator == 0) {
                     // เช็คว่ามี key 'statuses' และเป็น array ไหม กัน error
                     if (isset($wf['statuses']) && is_array($wf['statuses'])) {
@@ -146,7 +319,7 @@ switch ( $GET_DEV ) {
                 ORDER BY l.action_time DESC LIMIT 50";
             $json_data['data']   = CON::selectArrayDB( [], $sql );
         } else {
-            $sql = "SELECT l.*, d.title, d.document_code 
+            $sql = "SELECT l.*, d.title, d.document_code
                     FROM document_status_log l
                     JOIN documents d ON l.document_id = d.document_id
                     WHERE l.line_user_id_action = ?
@@ -155,11 +328,11 @@ switch ( $GET_DEV ) {
         }
         $json_data['status'] = 'success';
         break;
-        
-    
+
+
     case 'manage-workflow':
         $jsonFile = __DIR__ . '/../data/workflow_data.json';
-        
+
         // Helper Closures (ฟังก์ชันช่วยจัดการ JSON)
         $getJson = function() use ($jsonFile) {
             if (!file_exists($jsonFile)) {
@@ -193,7 +366,7 @@ switch ( $GET_DEV ) {
         try {
             if ($action === 'list') {
                 $data = $getJson();
-                
+
                 // 1. ตรวจสอบว่ามีหมวดพื้นฐานหรือยัง?
                 $hasDefault = false;
                 foreach ($data as $cat) {
@@ -209,7 +382,7 @@ switch ( $GET_DEV ) {
                     array_unshift($data, $defaultCategory);
                     $saveJson($data);
                 }
-                
+
                 // 3. กรองข้อมูลตาม User
                 if ($currentUser) {
                     $data = array_values(array_filter($data, function($item) use ($currentUser) {
@@ -222,7 +395,7 @@ switch ( $GET_DEV ) {
                 $json_data['success'] = true;
                 $json_data['data'] = $data;
                 $json_data['status'] = 'success';
-            } 
+            }
             elseif ($action === 'add_category') {
                 $name = $_POST['category_name'] ?? '';
                 if ($name) {
@@ -245,7 +418,7 @@ switch ( $GET_DEV ) {
             elseif ($action === 'edit_category') {
                 $id = $_POST['id'] ?? '';
                 $name = $_POST['category_name'] ?? '';
-                
+
                 if ($id === 'cat_default') {
                     $json_data['success'] = false;
                     $json_data['message'] = 'ไม่สามารถแก้ไขชื่อหมวดหมู่พื้นฐานได้';
