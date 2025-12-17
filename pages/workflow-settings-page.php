@@ -142,7 +142,7 @@
 
 <script>
     // URL API ให้ชี้ไปที่ไฟล์ backend ของคุณ
-    const API_URL = '../api/index.php?dev=manage_workflow';
+    const API_URL = '../api/index.php?dev=manage-workflow';
     let workflowData = [];
 
     document.addEventListener('DOMContentLoaded', loadWorkflows);
