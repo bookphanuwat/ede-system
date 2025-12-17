@@ -62,7 +62,7 @@ async function searchDocs() {
     if (keyword) {
         document.getElementById("searchResultArea").innerHTML = '<div class="text-center mt-3"><i class="fas fa-spinner fa-spin"></i> กำลังค้นหา...</div>';
         try {
-            const res = await fetch(`api/liff_api.php?action=search&keyword=${keyword}`);
+            const res = await fetch(`${site_url}/api/index.php?dev=search&keyword=${keyword}`);
             const json = await res.json();
             let html = "";
             if (json.data && json.data.length > 0) {
@@ -82,7 +82,7 @@ async function searchDocs() {
 // --- History ---
 async function loadHistory() {
     try {
-        const res = await fetch(`api/liff_api.php?action=history&line_id=${userProfile.userId}`);
+        const res = await fetch(`${site_url}/api/index.php?dev=history&line_id=${userProfile.userId}`);
         const json = await res.json();
         let html = "";
         if (json.data && json.data.length > 0) {
@@ -151,7 +151,7 @@ async function openUpdateModal() {
     let statusOptions = "";
     try {
         // [แก้ไข 3] ส่ง workflow_id ไปถาม API (จะได้เฉพาะอันที่ต้องการ)
-        const res = await fetch(`api/liff_api.php?action=get_statuses&workflow_id=${currentDocWorkflowId}`);
+        const res = await fetch(`${site_url}/api/index.php?dev=get_statuses&workflow_id=${currentDocWorkflowId}`);
         const json = await res.json();
         
         if (json.status === "success" && json.data.length > 0) {
@@ -194,7 +194,8 @@ async function openUpdateModal() {
         formData.append("picture_url", userProfile.pictureUrl);
         formData.append("device_info", liff.getOS());
 
-        await fetch("api/update_status.php", { method: "POST", body: formData });
+        // ส่ง action ผ่าน Query String (หรือจะ append ลง formData ก็ได้ แต่แก้ URL ง่ายกว่า)
+        await fetch(`${site_url}/api/index.php?dev=update-status`, { method: "POST", body: formData }); 
         Swal.fire({ title: "สำเร็จ", text: "บันทึกข้อมูลเรียบร้อยแล้ว", icon: "success", timer: 1500, showConfirmButton: false })
         .then(() => { closeDetail(); });
     }

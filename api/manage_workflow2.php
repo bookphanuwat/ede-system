@@ -2,11 +2,11 @@
 session_start();
 header('Content-Type: application/json; charset=utf-8');
 
-$jsonFile = '../data/workflow_data.json';
+$jsonFile = __DIR__ . '/data/workflow_data.json';
 
 // สร้างไฟล์ถ้ายังไม่มี
 if (!file_exists($jsonFile)) {
-    if (!is_dir('../data')) mkdir('../data', 0777, true);
+    if (!is_dir(__DIR__ . '/data')) mkdir(__DIR__ . '/data', 0777, true);
     file_put_contents($jsonFile, json_encode([], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
 }
 

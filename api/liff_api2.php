@@ -42,7 +42,7 @@ try {
         // รับค่า workflow_id ที่ส่งมาจาก JS
         $target_id = $_GET['workflow_id'] ?? ''; 
         
-        $jsonFile = '../data/workflow_data.json';
+        $jsonFile = __DIR__ . '/data/workflow_data.json';
         $statuses = [];
 
         if (file_exists($jsonFile)) {

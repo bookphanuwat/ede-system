@@ -62,7 +62,7 @@
 
     // โหลดข้อมูลสีจาก workflow_data.json
     $workflow_colors = [];
-    $json_file = __DIR__ . '/../data/workflow_data.json';
+    $json_file = __DIR__ . '/../api/data/workflow_data.json';
     if (file_exists($json_file)) {
         $workflows = json_decode(file_get_contents($json_file), true) ?? [];
         foreach ($workflows as $wf) {

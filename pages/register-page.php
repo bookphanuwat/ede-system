@@ -169,7 +169,7 @@
 </div>
 
 <script>
-    const API_URL = '../api/manage_workflow.php';
+    const API_URL = '../api/manage-workflow.php';
     const CURRENT_USER_ID = "<?php echo $_SESSION['user_id'] ?? ''; ?>";
     let allWorkflows = [];
 

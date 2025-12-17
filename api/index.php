@@ -188,7 +188,7 @@ require DEV_PATH . '/classes/db.class.v2.php';
 require DEV_PATH . '/functions/global.php';
 
 // สำหรับ dev parameter (อนุญาตเฉพาะ alphanumeric)
-$GET_DEV = sanitizeGetParam( 'dev', 'alphanumeric', '', 50 );
+$GET_DEV = sanitizeGetParam( 'dev', 'string', '', 50 );
 
 $json_data['data'] = [];
 
@@ -241,44 +241,63 @@ switch ( $GET_DEV ) {
         $json_data['logs']   = $logs;
         break;
 
-     case 'get_statuses':
-        // 1. รับค่า creator_id ผ่านฟังก์ชัน sanitize (ปลอดภัยกว่า $_GET โดยตรง)
-        // กำหนด default เป็น 0 ถ้าไม่ส่งมา
-        $creator_id = sanitizeGetParam('creator_id', 'int', 0);
+    case 'search':
+        $keyword = sanitizeGetParam( 'keyword', 'string', '' );
+        if ( empty( $keyword ) ) {
+            $json_data['status']  = 'error';
+            $json_data['message'] = 'ระบุคำค้นหา';
+        } else {
+            $sql = "SELECT d.*, dt.type_name 
+                    FROM documents d
+                    LEFT JOIN document_type dt ON d.type_id = dt.type_id
+                    WHERE d.document_code LIKE ? OR d.title LIKE ?
+                    ORDER BY d.created_at DESC LIMIT 10";
+            $params = ["%$keyword%", "%$keyword%"];
+            $json_data['data']   = CON::selectArrayDB( $params, $sql );
+            $json_data['status'] = 'success';
+        }
+        break;
 
-        // 2. กำหนด Path ไฟล์ JSON
-        // __DIR__ คือโฟลเดอร์ปัจจุบัน (api) ถอยกลับไป 1 ขั้น (..) แล้วเข้า data
-        $jsonFile = __DIR__ . '/../data/workflow_data.json';
+    case 'history':
+        $line_id = sanitizeGetParam( 'line_id', 'string', '' );
+        if ( empty( $line_id ) ) {
+            $json_data['status']  = 'error';
+            $json_data['message'] = 'No Line ID';
+        } else {
+            $sql = "SELECT l.*, d.title, d.document_code 
+                    FROM document_status_log l
+                    JOIN documents d ON l.document_id = d.document_id
+                    WHERE l.line_user_id_action = ?
+                    ORDER BY l.action_time DESC LIMIT 20";
+            $json_data['data']   = CON::selectArrayDB( [$line_id], $sql );
+            $json_data['status'] = 'success';
+        }
+        break;
 
+    case 'get_statuses':
+        $target_id = sanitizeGetParam( 'workflow_id', 'string', '' );
+        $jsonFile = __DIR__ . '/data/workflow_data.json';
         $statuses = [];
 
-        if (file_exists($jsonFile)) {
-            $jsonContent = file_get_contents($jsonFile);
-            $workflows = json_decode($jsonContent, true) ?? [];
-
-            // 3. วนลูปหาหมวดหมู่
-            foreach ($workflows as $wf) {
-                // กรองเฉพาะ Workflow ของ Creator คนนี้ (หรือของคนที่ ID=0/Null ถ้าเป็นระบบกลาง)
-                // หมายเหตุ: ต้องแก้ตรงนี้ให้ยืดหยุ่น ถ้า workflow ไม่ระบุ created_by ให้ถือว่าเป็นของทุกคน
-                $wfCreator = $wf['created_by'] ?? 0;
-
-                if ($wfCreator == $creator_id || $wfCreator == 0) {
-                    // เช็คว่ามี key 'statuses' และเป็น array ไหม กัน error
-                    if (isset($wf['statuses']) && is_array($wf['statuses'])) {
-                        foreach ($wf['statuses'] as $st) {
+        if ( file_exists( $jsonFile ) ) {
+            $workflows = json_decode( file_get_contents( $jsonFile ), true ) ?? [];
+            foreach ( $workflows as $wf ) {
+                if ( isset( $wf['id'] ) && $wf['id'] === $target_id ) {
+                    if ( isset( $wf['statuses'] ) && is_array( $wf['statuses'] ) ) {
+                        foreach ( $wf['statuses'] as $st ) {
                             $statuses[] = [
                                 'status_name' => $st['name'],
                                 'color'       => $st['color'],
-                                'category'    => $wf['name'] // ชื่อหมวดหมู่
+                                'category'    => $wf['name']
                             ];
                         }
                     }
+                    break;
                 }
             }
         }
 
-        // ถ้าไม่มีข้อมูลเลย ให้ใส่ Default
-        if (empty($statuses)) {
+        if ( empty( $statuses ) ) {
             $statuses = [
                 ['status_name' => 'Received', 'category' => 'ค่าเริ่มต้น'],
                 ['status_name' => 'Sent', 'category' => 'ค่าเริ่มต้น'],
@@ -286,52 +305,12 @@ switch ( $GET_DEV ) {
             ];
         }
 
-        // 4. ส่งค่ากลับ
         $json_data['data']   = $statuses;
         $json_data['status'] = 'success';
         break;
 
-    case 'search':
-        // ค้นหาเอกสารจาก keyword
-        $keyword = sanitizeGetParam( 'keyword', 'string', '' );
-        if ( empty( $keyword ) ) {
-            $json_data['status']  = 'error';
-            $json_data['message'] = 'ระบุคำค้นหา';
-        } else {
-            $sql = "SELECT d.*, dt.type_name
-                    FROM documents d
-                    LEFT JOIN document_type dt ON d.type_id = dt.type_id
-                    WHERE d.document_code LIKE ? OR d.title LIKE ?
-                    ORDER BY d.created_at DESC LIMIT 10";
-            $params = ["%{$keyword}%", "%{$keyword}%"];
-            $json_data['data'] = CON::selectArrayDB( $params, $sql );
-            $json_data['status'] = 'success';
-        }
-        break;
-
-    case 'history':
-        $line_id = sanitizeGetParam('line_id', 'string', '');
-        if (empty($line_id)) {
-            $sql = "SELECT l.*, d.title, d.document_code, u.fullname
-                FROM document_status_log l
-                LEFT JOIN documents d ON l.document_id = d.document_id
-                LEFT JOIN users u ON l.action_by = u.user_id
-                ORDER BY l.action_time DESC LIMIT 50";
-            $json_data['data']   = CON::selectArrayDB( [], $sql );
-        } else {
-            $sql = "SELECT l.*, d.title, d.document_code
-                    FROM document_status_log l
-                    JOIN documents d ON l.document_id = d.document_id
-                    WHERE l.line_user_id_action = ?
-                    ORDER BY l.action_time DESC LIMIT 20";
-            $json_data['data']   = CON::selectArrayDB( [$line_id], $sql );
-        }
-        $json_data['status'] = 'success';
-        break;
-
-
     case 'manage-workflow':
-        $jsonFile = __DIR__ . '/../data/workflow_data.json';
+        $jsonFile = __DIR__ . '/data/workflow_data.json';
 
         // Helper Closures (ฟังก์ชันช่วยจัดการ JSON)
         $getJson = function() use ($jsonFile) {
@@ -551,6 +530,60 @@ switch ( $GET_DEV ) {
             'success' => false,
             'message' => 'ไม่ได้ระบุหมายเหตุหรือ action:' . $GET_DEV . ' ไม่ถูกต้อง'
         ];
+        break;
+        
+    case 'update-status':
+        // 1. รับค่าจาก POST Data (ที่ส่งมาจาก Liff FormData)
+        $doc_code      = $_POST['doc_code'] ?? '';
+        $status        = $_POST['status'] ?? '';
+        $receiver_name = $_POST['receiver_name'] ?? ''; // หมายเหตุ/ชื่อผู้รับ
+        $line_user_id  = $_POST['line_user_id'] ?? '';
+        $display_name  = $_POST['display_name'] ?? '';
+        $device_info   = $_POST['device_info'] ?? '';
+        
+        // *อาจจะรับ picture_url เพิ่มถ้าใน database มี field รองรับ
+        // $picture_url = $_POST['picture_url'] ?? '';
+
+        // 2. ตรวจสอบข้อมูลจำเป็น
+        if ( empty($doc_code) || empty($status) ) {
+            $json_data['status']  = 'error';
+            $json_data['message'] = 'ข้อมูลไม่ครบถ้วน (Missing doc_code or status)';
+            break;
+        }
+
+        // 3. หา document_id จาก doc_code ก่อน (เพื่อเอาไปใส่ log)
+        $sql_find = "SELECT document_id FROM documents WHERE document_code = ? LIMIT 1";
+        $doc_res  = CON::selectArrayDB( [$doc_code], $sql_find );
+
+        if ( empty($doc_res) ) {
+            $json_data['status']  = 'error';
+            $json_data['message'] = 'ไม่พบรหัสเอกสารในระบบ';
+            break;
+        }
+        $doc_id = $doc_res[0]['document_id'];
+
+        // 4. อัปเดตสถานะปัจจุบันในตาราง documents
+        $sql_update = "UPDATE documents 
+                       SET current_status = ?, 
+                           receiver_name = ?, 
+                           updated_at = NOW() 
+                       WHERE document_id = ?";
+        // ใช้ updateDB([params], sql)
+        CON::updateDB( [$status, $receiver_name, $doc_id], $sql_update );
+
+        // 5. บันทึกประวัติลงตาราง document_status_log
+        // action_by = 0 เพราะเป็นบุคคลภายนอก (User ทั่วไปผ่าน LINE)
+        $sql_log = "INSERT INTO document_status_log 
+                    (document_id, status, action_time, receiver_name, line_user_id_action, fullname, device_info, action_by) 
+                    VALUES (?, ?, NOW(), ?, ?, ?, ?, 0)";
+        
+        // ใช้ updateDB สำหรับ Insert (เพราะส่วนใหญ่ Class DB จะใช้ function เดียวกันในการ execute)
+        // หรือถ้ามี CON::insertDB ให้เปลี่ยนไปใช้ตัวนั้นแทน
+        CON::updateDB( [$doc_id, $status, $receiver_name, $line_user_id, $display_name, $device_info], $sql_log );
+
+        $json_data['success'] = true; // รองรับ JS ตัวเดิมที่อาจเช็คค่านี้
+        $json_data['status']  = 'success';
+        $json_data['message'] = 'บันทึกข้อมูลเรียบร้อยแล้ว';
         break;
 }
 
