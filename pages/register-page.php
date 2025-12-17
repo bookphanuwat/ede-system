@@ -169,7 +169,7 @@
 </div>
 
 <script>
-    const API_URL = '../api/manage-workflow.php';
+    const API_URL = '../api/index.php?dev=manage-workflow';
     const CURRENT_USER_ID = "<?php echo $_SESSION['user_id'] ?? ''; ?>";
     let allWorkflows = [];
 
@@ -222,7 +222,7 @@
         const select = document.getElementById( 'workflowSelect' );
         select.innerHTML = '<option value="" disabled selected>กำลังโหลดข้อมูล...</option>';
 
-        fetch( `${API_URL}?action=list&user_id=${CURRENT_USER_ID}` )
+        fetch( `${API_URL}&action=list&user_id=${CURRENT_USER_ID}` )
             .then( res => res.json() )
             .then( res => {
                 select.innerHTML = '<option value="" selected disabled>-- กรุณาเลือกหมวดหมู่สถานะ --</option>';
