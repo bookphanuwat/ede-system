@@ -151,7 +151,7 @@ async function openUpdateModal() {
     let statusOptions = "";
     try {
         // [แก้ไข 3] ส่ง workflow_id ไปถาม API (จะได้เฉพาะอันที่ต้องการ)
-        const res = await fetch(`${site_url}/api/index.php?dev=get_statuses&workflow_id=${currentDocWorkflowId}`);
+        const res = await fetch(`${site_url}/api/index.php?dev=get-statuses&workflow_id=${currentDocWorkflowId}`);
         const json = await res.json();
         
         if (json.status === "success" && json.data.length > 0) {

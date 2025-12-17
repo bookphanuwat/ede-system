@@ -27,7 +27,7 @@ header( 'Access-Control-Allow-Methods:  POST, GET' );
  * ============================================================================
  * 1. Router Pattern: ใช้ Query Parameter 'dev' เพื่อระบุ action ที่ต้องการ
  *    - getdocinfo     : ดึงข้อมูลเอกสาร พร้อมประวัติสถานะ
- *    - get_statuses   : ดึงรายการสถานะจากไฟล์ workflow_data.json
+ *    - get-statuses   : ดึงรายการสถานะจากไฟล์ workflow_data.json
  *    - search         : ค้นหาเอกสารตามคำค้นหา
  *    - history        : ดึงข้อมูลประวัติการทำงาน
  *    - manage-workflow: จัดการสถานะและหมวดหมู่เอกสาร
@@ -57,7 +57,7 @@ header( 'Access-Control-Allow-Methods:  POST, GET' );
  * - keyword (สำหรับ search):
  *   คำค้นหาในฐานข้อมูล (string)
  *
- * - creator_id (สำหรับ get_statuses):
+ * - creator_id (สำหรับ get-statuses):
  *   ID ของผู้สร้าง workflow (int) - ใช้กรองสถานะตามเจ้าของ
  *
  * - line_id (สำหรับ history):
@@ -164,7 +164,7 @@ header( 'Access-Control-Allow-Methods:  POST, GET' );
  *    GET /api/search/?keyword=ใบส่งสินค้า
  *
  * 4. ดึงรายการสถานะ (Pattern: /dev?creator_id=...):
- *    GET /api/get_statuses/?creator_id=5
+ *    GET /api/get-statuses/?creator_id=5
  *
  * 5. จัดการ Workflow (Pattern: /dev):
  *    POST /api/manage-workflow/
@@ -274,7 +274,7 @@ switch ( $GET_DEV ) {
         }
         break;
 
-    case 'get_statuses':
+    case 'get-statuses':
         $target_id = sanitizeGetParam( 'workflow_id', 'string', '' );
         $jsonFile = __DIR__ . '/data/workflow_data.json';
         $statuses = [];
@@ -307,6 +307,63 @@ switch ( $GET_DEV ) {
 
         $json_data['data']   = $statuses;
         $json_data['status'] = 'success';
+        break;
+
+    case 'update-status':
+        // 1. รับค่าจาก POST Data
+        $doc_code      = $_POST['doc_code'] ?? '';
+        $new_status    = $_POST['status'] ?? 'Received';
+        $next_receiver = $_POST['receiver_name'] ?? '';
+        $line_user_id  = $_POST['line_user_id'] ?? '';
+        $device_info   = $_POST['device_info'] ?? 'Unknown';
+        $display_name  = $_POST['display_name'] ?? 'Unknown User';
+        $picture_url   = $_POST['picture_url'] ?? '';
+
+        // หา IP Address
+        $ip_address = $_SERVER['HTTP_CLIENT_IP'] ?? $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? '';
+
+        if ( empty( $doc_code ) ) {
+            $json_data['status']  = 'error';
+            $json_data['message'] = 'Error: No Code';
+        } else {
+            // 2. หา ID เอกสาร
+            $sqlDoc = "SELECT document_id FROM documents WHERE document_code = ?";
+            $resDoc = CON::selectArrayDB( [$doc_code], $sqlDoc );
+
+            if ( empty( $resDoc ) ) {
+                $json_data['status']  = 'error';
+                $json_data['message'] = 'ไม่พบเอกสาร';
+            } else {
+                $doc_id = $resDoc[0]['document_id'];
+
+                // 3. อัปเดตสถานะหลัก
+                $updateParams = [$new_status];
+                $updateSql = "UPDATE documents SET current_status = ?";
+                if ( !empty( $next_receiver ) ) {
+                    $updateSql .= ", receiver_name = ?";
+                    $updateParams[] = $next_receiver;
+                }
+                $updateSql .= " WHERE document_id = ?";
+                $updateParams[] = $doc_id;
+                CON::updateDB( $updateParams, $updateSql );
+
+                // 4. บันทึก Log
+                // หา user_id ในระบบ (ถ้ามี)
+                $action_by = NULL;
+                if ( !empty( $line_user_id ) ) {
+                    $sqlUser = "SELECT user_id FROM users WHERE line_user_id = ?";
+                    $resUser = CON::selectArrayDB( [$line_user_id], $sqlUser );
+                    if ( !empty( $resUser ) ) $action_by = $resUser[0]['user_id'];
+                }
+
+                $log_note = !empty( $next_receiver ) ? "ส่งต่อให้: $next_receiver" : "อัปเดตสถานะ";
+                $sqlLog = "INSERT INTO document_status_log (document_id, status, action_by, line_user_id_action, location_note, ip_address, device_info, actor_name_snapshot, actor_pic_snapshot) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                CON::updateDB( [$doc_id, $new_status, $action_by, $line_user_id, $log_note, $ip_address, $device_info, $display_name, $picture_url], $sqlLog );
+
+                $json_data['status'] = 'success';
+                $json_data['message'] = 'Success';
+            }
+        }
         break;
 
     case 'manage-workflow':
@@ -523,6 +580,7 @@ switch ( $GET_DEV ) {
             $json_data['message'] = 'Error: ' . $e->getMessage();
         }
         break;
+    
 
     default:
         http_response_code( 400 );
@@ -532,59 +590,6 @@ switch ( $GET_DEV ) {
         ];
         break;
         
-    case 'update-status':
-        // 1. รับค่าจาก POST Data (ที่ส่งมาจาก Liff FormData)
-        $doc_code      = $_POST['doc_code'] ?? '';
-        $status        = $_POST['status'] ?? '';
-        $receiver_name = $_POST['receiver_name'] ?? ''; // หมายเหตุ/ชื่อผู้รับ
-        $line_user_id  = $_POST['line_user_id'] ?? '';
-        $display_name  = $_POST['display_name'] ?? '';
-        $device_info   = $_POST['device_info'] ?? '';
-        
-        // *อาจจะรับ picture_url เพิ่มถ้าใน database มี field รองรับ
-        // $picture_url = $_POST['picture_url'] ?? '';
-
-        // 2. ตรวจสอบข้อมูลจำเป็น
-        if ( empty($doc_code) || empty($status) ) {
-            $json_data['status']  = 'error';
-            $json_data['message'] = 'ข้อมูลไม่ครบถ้วน (Missing doc_code or status)';
-            break;
-        }
-
-        // 3. หา document_id จาก doc_code ก่อน (เพื่อเอาไปใส่ log)
-        $sql_find = "SELECT document_id FROM documents WHERE document_code = ? LIMIT 1";
-        $doc_res  = CON::selectArrayDB( [$doc_code], $sql_find );
-
-        if ( empty($doc_res) ) {
-            $json_data['status']  = 'error';
-            $json_data['message'] = 'ไม่พบรหัสเอกสารในระบบ';
-            break;
-        }
-        $doc_id = $doc_res[0]['document_id'];
-
-        // 4. อัปเดตสถานะปัจจุบันในตาราง documents
-        $sql_update = "UPDATE documents 
-                       SET current_status = ?, 
-                           receiver_name = ?, 
-                           updated_at = NOW() 
-                       WHERE document_id = ?";
-        // ใช้ updateDB([params], sql)
-        CON::updateDB( [$status, $receiver_name, $doc_id], $sql_update );
-
-        // 5. บันทึกประวัติลงตาราง document_status_log
-        // action_by = 0 เพราะเป็นบุคคลภายนอก (User ทั่วไปผ่าน LINE)
-        $sql_log = "INSERT INTO document_status_log 
-                    (document_id, status, action_time, receiver_name, line_user_id_action, fullname, device_info, action_by) 
-                    VALUES (?, ?, NOW(), ?, ?, ?, ?, 0)";
-        
-        // ใช้ updateDB สำหรับ Insert (เพราะส่วนใหญ่ Class DB จะใช้ function เดียวกันในการ execute)
-        // หรือถ้ามี CON::insertDB ให้เปลี่ยนไปใช้ตัวนั้นแทน
-        CON::updateDB( [$doc_id, $status, $receiver_name, $line_user_id, $display_name, $device_info], $sql_log );
-
-        $json_data['success'] = true; // รองรับ JS ตัวเดิมที่อาจเช็คค่านี้
-        $json_data['status']  = 'success';
-        $json_data['message'] = 'บันทึกข้อมูลเรียบร้อยแล้ว';
-        break;
 }
 
 echo json_encode( $json_data, JSON_UNESCAPED_UNICODE );
