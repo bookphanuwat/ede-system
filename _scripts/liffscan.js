@@ -185,17 +185,22 @@ async function openUpdateModal() {
 
     if (formValues) {
         const [status, receiver] = formValues;
-        const formData = new FormData();
-        formData.append("doc_code", currentDocCode);
-        formData.append("status", status);
-        formData.append("receiver_name", receiver);
-        formData.append("line_user_id", userProfile.userId);
-        formData.append("display_name", userProfile.displayName);
-        formData.append("picture_url", userProfile.pictureUrl);
-        formData.append("device_info", liff.getOS());
+        const payload = {
+            doc_code: currentDocCode,
+            status: status,
+            receiver_name: receiver,
+            line_user_id: userProfile.userId,
+            display_name: userProfile.displayName,
+            picture_url: userProfile.pictureUrl,
+            device_info: liff.getOS()
+        };
 
         // ส่ง action ผ่าน Query String (หรือจะ append ลง formData ก็ได้ แต่แก้ URL ง่ายกว่า)
-        await fetch(`${site_url}/api/index.php?dev=update-status`, { method: "POST", body: formData }); 
+        await fetch(`${site_url}/api/index.php?dev=update-status`, { 
+            method: "POST", 
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload) 
+        }); 
         Swal.fire({ title: "สำเร็จ", text: "บันทึกข้อมูลเรียบร้อยแล้ว", icon: "success", timer: 1500, showConfirmButton: false })
         .then(() => { closeDetail(); });
     }

@@ -311,13 +311,20 @@ switch ( $GET_DEV ) {
 
     case 'update-status':
         // 1. รับค่าจาก POST Data
-        $doc_code      = $_POST['doc_code'] ?? '';
-        $new_status    = $_POST['status'] ?? 'Received';
-        $next_receiver = $_POST['receiver_name'] ?? '';
-        $line_user_id  = $_POST['line_user_id'] ?? '';
-        $device_info   = $_POST['device_info'] ?? 'Unknown';
-        $display_name  = $_POST['display_name'] ?? 'Unknown User';
-        $picture_url   = $_POST['picture_url'] ?? '';
+        $inputData = $_POST;
+        // รองรับ JSON Body
+        $contentType = $_SERVER["CONTENT_TYPE"] ?? '';
+        if (stripos($contentType, 'application/json') !== false) {
+            $inputData = json_decode(file_get_contents('php://input'), true) ?? [];
+        }
+
+        $doc_code      = $inputData['doc_code'] ?? '';
+        $new_status    = $inputData['status'] ?? 'Received';
+        $next_receiver = $inputData['receiver_name'] ?? '';
+        $line_user_id  = $inputData['line_user_id'] ?? '';
+        $device_info   = $inputData['device_info'] ?? 'Unknown';
+        $display_name  = $inputData['display_name'] ?? 'Unknown User';
+        $picture_url   = $inputData['picture_url'] ?? '';
 
         // หา IP Address
         $ip_address = $_SERVER['HTTP_CLIENT_IP'] ?? $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? '';
