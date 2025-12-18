@@ -24,14 +24,36 @@
         return $string ? implode( ', ', $string ) : 'เมื่อสักครู่';
     }
 
-    // ฟังก์ชันสีสถานะ
-    function getStatusColor( $status ) {
-        switch ( $status ) {
-            case 'Received': return 'success';
-            case 'Sent': return 'warning';
-            case 'Registered': return 'info';
-            case 'Late': return 'danger';
-            default: return 'secondary';
+    // โหลดข้อมูลสีจาก workflow_data.json
+    $workflow_colors = [];
+    $json_file = __DIR__ . '/../api/data/workflow_data.json';
+    if (file_exists($json_file)) {
+        $workflows = json_decode(file_get_contents($json_file), true) ?? [];
+        foreach ($workflows as $wf) {
+            if (!empty($wf['statuses'])) {
+                foreach ($wf['statuses'] as $st) {
+                    $workflow_colors[$st['name']] = $st['color'];
+                }
+            }
+        }
+    }
+
+    // ฟังก์ชันสร้าง Badge สถานะ (รองรับ Hex Color)
+    function getStatusBadge($status, $colors) {
+        $c = $colors[$status] ?? '';
+        if (!$c) {
+            // Fallback ค่าเริ่มต้น
+            if ($status === 'Received') $c = 'success';
+            elseif ($status === 'Sent') $c = 'warning';
+            elseif ($status === 'Registered') $c = 'info';
+            elseif ($status === 'Late') $c = 'danger';
+            else $c = 'secondary';
+        }
+
+        if (strpos($c, '#') === 0) {
+            return '<span class="badge rounded-pill text-uppercase px-3 py-2 shadow-sm" style="background-color: ' . $c . '; color: #fff;">' . htmlspecialchars($status) . '</span>';
+        } else {
+            return '<span class="badge rounded-pill bg-' . $c . ' text-uppercase px-3 py-2">' . htmlspecialchars($status) . '</span>';
         }
     }
 
@@ -97,6 +119,20 @@
 
 ?>
 
+<style>
+    /* CSS สำหรับ Timeline */
+    .timeline { border-left: 2px solid #e9ecef; margin-left: 10px; padding-left: 20px; padding-top: 10px; padding-bottom: 10px; }
+    .timeline-item { position: relative; margin-bottom: 25px; }
+    .timeline-item:last-child { margin-bottom: 0; }
+    .timeline-dot {
+        width: 12px; height: 12px; background: #adb5bd; border-radius: 50%;
+        position: absolute; left: -27px; top: 5px; border: 2px solid #fff; box-shadow: 0 0 0 2px #e9ecef;
+    }
+    .timeline-dot.active { background: var(--bs-success); box-shadow: 0 0 0 2px #c3e6cb; }
+    .animate-fade-in { animation: fadeIn 0.5s ease-in-out; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+</style>
+
 <div class="page-content">
     <h5 class="mb-4 fw-bold text-secondary text-center">**🔍 ค้นหาและติดตามเอกสาร**</h5>
 
@@ -122,7 +158,7 @@
                     <h5 class="mb-1 text-success fw-bold"><i class="far fa-file-alt me-2"></i><?php echo htmlspecialchars( $doc_data['title'] ?? '' ); ?></h5>
                     <small class="text-muted">เลขทะเบียน: <strong><?php echo htmlspecialchars( $doc_data['document_code'] ?? '' ); ?></strong> | ระยะเวลา: <strong><?php echo time_elapsed_string( $doc_data['created_at'] ?? '' ); ?></strong></small>
                 </div>
-                <span class="badge rounded-pill bg-<?php echo getStatusColor( $doc_data['current_status'] ?? '' ); ?> text-uppercase px-3 py-2"><?php echo htmlspecialchars( $doc_data['current_status'] ?? '' ); ?></span>
+                <?php echo getStatusBadge( $doc_data['current_status'] ?? '', $workflow_colors ); ?>
             </div>
             <div class="card-body p-4">
                 <div class="timeline">
