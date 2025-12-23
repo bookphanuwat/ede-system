@@ -17,6 +17,8 @@ RewriteRule ^([0-9a-z-]+)/?$ index.php?dev=$1 [QSA]
 
 <IfModule mod_headers.c>
   Header set X-UA-Compatible "IE=Edge,chrome=1"
+  # เพิ่มบรรทัดนี้ (รองรับ CDN ที่คุณใช้อยู่)
+  Header set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://cdn.jsdelivr.net https://static.line-scdn.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self';"
   # mod_headers can't match by content-type, but we don't want to send this header on *everything*...
   <FilesMatch "\.(appcache|crx|css|eot|gif|htc|ico|jpe?g|js|m4a|m4v|manifest|mp4|oex|oga|ogg|ogv|otf|pdf|png|safariextz|svg|svgz|ttf|vcf|webm|webp|woff|xml|xpi)$">
     Header unset X-UA-Compatible
