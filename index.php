@@ -53,11 +53,6 @@
     <!-- <link rel="stylesheet" href="<?php echo ASSET_PATH; ?>/fonts/maledpan/maledpan.css">
     <link rel="stylesheet" href="<?php echo ASSET_PATH; ?>/fonts/chatthai/chatthai.css"> -->
     <link href="<?php echo SITE_URL;?>/css/main.min.css" rel="stylesheet">
-    <script src="https://unpkg.com/vconsole@3.15.1/dist/vconsole.min.js" integrity= "sha384-XBaXkO24GFHDdwfHdBF1YzWHG0GTdozumNQq/LXxfFP5Lgzhdx0INxn9BH+UyaR2" crossorigin= "anonymous" >
-<script>
-  // VConsole will be exported to `window.VConsole` by default.
-  var vConsole = new window.VConsole();
-</script>
 </head>
 
 <body>

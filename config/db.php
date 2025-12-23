@@ -18,11 +18,9 @@ try {
 
     $pdo = new PDO( $dsn, $username, $password, $options );
 
-} catch ( PDOException $e ) {
-    // บันทึก Error จริงลง Server Log (ถ้าทำได้) แต่ห้าม echo ออกไปให้ User เห็น
-    error_log("Database Connection Error: " . $e->getMessage());
-    
-    // แสดงข้อความทั่วไป
-    http_response_code(500);
-    die( "System Error: Unable to connect to database. Please contact administrator." );
+}  catch ( PDOException $e ) {
+    // แก้เป็นบรรทัดนี้ เพื่อให้เห็น Error ตัวแดงๆ
+    echo "Connection failed: " . $e->getMessage();
+    exit;
 }
+
