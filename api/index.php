@@ -1,4 +1,6 @@
 <?php
+ini_set('session.cookie_httponly', 1);
+ini_set('session.cookie_secure', 1);
 session_start();
 // ปิดการแสดง error ผ่าน API response
 ini_set('display_errors', 0);

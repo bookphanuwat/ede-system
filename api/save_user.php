@@ -1,4 +1,6 @@
 <?php
+ini_set('session.cookie_httponly', 1);
+ini_set('session.cookie_secure', 1);
 session_start();
 require_once '../config/db.php'; // ตรวจสอบ path ให้ถูก ต้องถอยกลับ 1 ขั้น
 

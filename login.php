@@ -1,4 +1,6 @@
 <?php
+ini_set('session.cookie_httponly', 1);
+ini_set('session.cookie_secure', 1);
 session_start();
 // 1. เพิ่มบรรทัดนี้
 header("X-Frame-Options: SAMEORIGIN");

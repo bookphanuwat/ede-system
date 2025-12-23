@@ -1,4 +1,8 @@
 <?php
+    // เพิ่มการตั้งค่า Cookie ก่อน session_start()
+    ini_set('session.cookie_httponly', 1); // แก้ปัญหา HttpOnly Flag
+    ini_set('session.cookie_secure', 1);   // แนะนำ: เพราะเว็บคุณใช้ https://
+    ini_set('session.use_only_cookies', 1); // ป้องกันการโจมตี session fixation
     session_start();
     ob_start(); // <--- 1. เพิ่มบรรทัดนี้ครับ (สำคัญมาก)
     // 1. เพิ่มบรรทัดนี้
