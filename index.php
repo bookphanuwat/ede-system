@@ -46,7 +46,7 @@
     <!-- <link rel="stylesheet" href="<?php echo ASSET_PATH; ?>/fonts/maledpan/maledpan.css">
     <link rel="stylesheet" href="<?php echo ASSET_PATH; ?>/fonts/chatthai/chatthai.css"> -->
     <link href="<?php echo SITE_URL;?>/css/main.min.css" rel="stylesheet">
-    <script src="https://unpkg.com/vconsole@latest/dist/vconsole.min.js"></script>
+    <script src="https://unpkg.com/vconsole@3.15.1/dist/vconsole.min.js" integrity= "sha384-XBaXkO24GFHDdwfHdBF1YzWHG0GTdozumNQq/LXxfFP5Lgzhdx0INxn9BH+UyaR2" crossorigin= "anonymous" >
 <script>
   // VConsole will be exported to `window.VConsole` by default.
   var vConsole = new window.VConsole();
@@ -135,11 +135,11 @@
     <!-- <script src="<?php echo ASSET_PATH; ?>/jquery/dist/jquery.min.js"></script> -->
     <script src="<?php echo ASSET_PATH; ?>/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     <script src="<?php echo ASSET_PATH; ?>/sweetalert2/dist/sweetalert2.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
-    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"  integrity= "sha384-3zSEDfvllQohrq0PHL1fOXJuC/jSOO34H46t6UQfobFOmxE5BpjjaIJY5F2/bMnU" crossorigin= "anonymous" ></script>
+    <script src="https://static.line-scdn.net/liff/edge/versions/2.22.3/sdk.js" integrity= "sha384-8o1W4LoaXMHxZ3rlgZvkvteifNsxbvNaHBhpaWDkHEsTNva1C8mRfd0Bi7YDJYtg" crossorigin= "anonymous"></script>
 
 
-    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js" integrity= "sha384-eeLEhtwdMwD3X9y+8P3Cn7Idl/M+w8H4uZqkgD/2eJVkWIN1yKzEj6XegJ9dL3q0" crossorigin= "anonymous"></script>
 
     <!-- Global Scripts -->
     <script src="<?php echo SITE_URL; ?>/js/global.min.js?v=<?php echo filemtime( 'js/global.min.js' ); ?>"></script>
