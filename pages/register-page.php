@@ -53,8 +53,11 @@
         CON::updateDB( [$document_id, $initial_status, $created_by], $sqlLog );
 
         // 5. ส่งไปหน้าพิมพ์
-        header("Location: /ede-system/print/" . $document_code . "/");
-        exit;
+        // ล้าง HTML (Header, Sidebar) ที่ถูกสร้างมาก่อนหน้านี้ทิ้งไป
+            while (ob_get_level()) { ob_end_clean(); } // <--- 2. เพิ่มบรรทัดนี้
+        // แล้วค่อย Redirect
+            header("Location: /ede-system/print/" . $document_code . "/");
+            exit;
 
     } catch (Exception $e) {
         if ($e->getCode() == 23000) {
