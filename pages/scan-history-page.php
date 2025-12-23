@@ -117,9 +117,9 @@
                         $user_icon = "<div class='rounded-circle bg-light d-flex align-items-center justify-content-center me-2 border' style='width:35px; height:35px;'><i class='fas fa-user text-secondary'></i></div>";
                     }
 
-                    $h_status = $h['status'] ?? '-';
-                    $h_ip     = $h['ip_address'] ?? '-';
-                    $h_device = $h['device_info'] ?? '-'; // เพิ่มตัวแปร device_info
+                    $h_status = htmlspecialchars($h['status'] ?? '-', ENT_QUOTES, 'UTF-8');
+                    $h_ip     = htmlspecialchars($h['ip_address'] ?? '-', ENT_QUOTES, 'UTF-8');
+                    $h_device = htmlspecialchars($h['device_info'] ?? '-', ENT_QUOTES, 'UTF-8'); // เพิ่มตัวแปร device_info
 
                     // สร้าง List Item
                     $html .= "
@@ -188,11 +188,11 @@
     if (count($history) > 0) {
         foreach ($history as $row) {
             $time = date('d/m/Y H:i', strtotime($row['action_time']));
-            $code = $row['document_code'] ?? '';
-            $title = $row['title'] ?? '';
+            $code = htmlspecialchars($row['document_code'] ?? '', ENT_QUOTES, 'UTF-8');
+            $title = htmlspecialchars($row['title'] ?? '', ENT_QUOTES, 'UTF-8');
             $status = $row['status'] ?? '-';
-            $ip = $row['ip_address'] ?? '';
-            $device = $row['device_info'] ?? '-'; // เพิ่ม device_info
+            $ip = htmlspecialchars($row['ip_address'] ?? '', ENT_QUOTES, 'UTF-8');
+            $device = htmlspecialchars($row['device_info'] ?? '-', ENT_QUOTES, 'UTF-8'); // เพิ่ม device_info
             $docId = $row['document_id'];
 
             // Style Link: ใช้คลาส doc-link สีฟ้าเหมือน Dashboard

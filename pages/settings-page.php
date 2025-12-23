@@ -12,15 +12,20 @@
     $userRows = '';
     if ( count( $users ) > 0 ) {
         foreach ( $users as $user ) {
-            $fullname = $user['fullname'] ?? '';
-            $username = $user['username'] ?? '';
-            $department = $user['department'] ?? '-';
-            $roleName = $user['role_name'] ?? '';
+            $raw_username = $user['username'] ?? '';
+            $fullname = htmlspecialchars($user['fullname'] ?? '', ENT_QUOTES, 'UTF-8');
+            $username = htmlspecialchars($raw_username, ENT_QUOTES, 'UTF-8');
+            $department = htmlspecialchars($user['department'] ?? '-', ENT_QUOTES, 'UTF-8');
+            $roleNameRaw = $user['role_name'] ?? '';
+            $roleName = htmlspecialchars($roleNameRaw, ENT_QUOTES, 'UTF-8');
             $userId = $user['user_id'] ?? 0;
+            
+            // Escape for JS context in onclick
+            $username_js = htmlspecialchars(addslashes($raw_username), ENT_QUOTES, 'UTF-8');
 
             $badgeColor = 'bg-secondary';
-            if ( stripos( $roleName, 'admin' ) !== false ) $badgeColor = 'bg-primary';
-            if ( stripos( $roleName, 'staff' ) !== false ) $badgeColor = 'bg-info text-dark';
+            if ( stripos( $roleNameRaw, 'admin' ) !== false ) $badgeColor = 'bg-primary';
+            if ( stripos( $roleNameRaw, 'staff' ) !== false ) $badgeColor = 'bg-info text-dark';
 
             $userRows .= "<tr>
                 <td class='ps-4'>
@@ -30,8 +35,8 @@
                 <td class='text-center text-secondary'>$department</td>
                 <td class='text-center'><span class='badge rounded-pill $badgeColor px-3 py-2'>$roleName</span></td>
                 <td class='text-center'>
-                    <a href='settings_form.php?id=$userId' class='btn btn-sm btn-light rounded-pill border me-1 text-primary' title='แก้ไข'><i class='fas fa-edit'></i></a>
-                    <a href='javascript:void(0);' onclick=\"confirmDelete($userId, '$username')\" class='btn btn-sm btn-light rounded-pill border text-danger' title='ลบ'><i class='fas fa-trash-alt'></i></a>
+                    <a href='../settings_form.php?id=$userId' class='btn btn-sm btn-light rounded-pill border me-1 text-primary' title='แก้ไข'><i class='fas fa-edit'></i></a>
+                    <a href='javascript:void(0);' onclick=\"confirmDelete($userId, '$username_js')\" class='btn btn-sm btn-light rounded-pill border text-danger' title='ลบ'><i class='fas fa-trash-alt'></i></a>
                 </td>
             </tr>";
         }
@@ -44,7 +49,7 @@
 <div class="page-content">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h5 class="fw-bold text-secondary mb-0">**⚙️ จัดการผู้ใช้งาน**</h5>
-        <a href="settings_form.php" class="btn btn-success rounded-pill px-4 shadow-sm" style="background-color: #00E676; border:none; color:black; font-weight: bold;">
+        <a href="../settings_form.php" class="btn btn-success rounded-pill px-4 shadow-sm" style="background-color: #00E676; border:none; color:black; font-weight: bold;">
             <i class="fas fa-user-plus me-2"></i>เพิ่มผู้ใช้งานใหม่
         </a>
     </div>
@@ -77,7 +82,7 @@
 <script>
 function confirmDelete(userId, username) {
     if (confirm("คุณต้องการลบผู้ใช้ '" + username + "' ใช่หรือไม่?\nการกระทำนี้ไม่สามารถเรียกคืนได้")) {
-        window.location.href = 'api/delete_user.php?id=' + userId;
+        window.location.href = '../api/delete_user.php?id=' + userId;
     }
 }
 </script>

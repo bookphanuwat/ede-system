@@ -3,12 +3,26 @@ session_start();
 require_once '../config/db.php'; // ตรวจสอบ path ให้ถูก ต้องถอยกลับ 1 ขั้น
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // CSRF Protection: ตรวจสอบ Token
+    if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
+        die("Error: Invalid CSRF Token (Security Check Failed)");
+    }
+
     // รับค่าจากฟอร์ม
     $user_id = $_POST['user_id'] ?? null;
-    $username = trim($_POST['username'] ?? '');
+    
+    // Sanitization: ป้องกัน XSS โดยการลบ HTML Tags และตัดช่องว่าง
+    $username = trim(strip_tags($_POST['username'] ?? ''));
+    $fullname = trim(strip_tags($_POST['fullname'] ?? ''));
+    $department = trim(strip_tags($_POST['department'] ?? ''));
+
+    // Security: ป้องกัน Path Traversal (ห้ามมี .. ในข้อมูล)
+    if (strpos($fullname, '..') !== false || strpos($department, '..') !== false) {
+        echo "<script>alert('❌ ข้อมูลไม่ถูกต้อง (ห้ามมี ..)'); window.history.back();</script>";
+        exit;
+    }
+
     $password = $_POST['password'] ?? '';
-    $fullname = trim($_POST['fullname']);
-    $department = trim($_POST['department']);
     $role_id = $_POST['role_id'];
 
     try {
@@ -26,11 +40,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt->execute([$fullname, $department, $role_id, $user_id]);
             }
             
-            echo "<script>alert('✅ แก้ไขข้อมูลเรียบร้อย'); window.location.href='../settings.php';</script>";
+            echo "<script>alert('✅ แก้ไขข้อมูลเรียบร้อย'); window.location.href='../settings/';</script>";
 
         } else {
             // --- กรณีเพิ่มใหม่ (Insert) ---
             
+            // Validation: ตรวจสอบ Username (อนุญาตเฉพาะ A-Z, a-z, 0-9 และ _)
+            if (!preg_match('/^[a-zA-Z0-9_]+$/', $username)) {
+                echo "<script>alert('❌ Username ต้องประกอบด้วยตัวอักษรภาษาอังกฤษ ตัวเลข หรือ _ เท่านั้น'); window.history.back();</script>";
+                exit;
+            }
+
             // 1. เช็คก่อนว่า username ซ้ำไหม?
             $check = $pdo->prepare("SELECT COUNT(*) FROM users WHERE username = ?");
             $check->execute([$username]);
@@ -50,18 +70,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt = $pdo->prepare("INSERT INTO users (username, password_hash, fullname, department, role_id) VALUES (?, ?, ?, ?, ?)");
             $stmt->execute([$username, $password_hash, $fullname, $department, $role_id]);
 
-            echo "<script>alert('✅ เพิ่มผู้ใช้งานเรียบร้อย'); window.location.href='../settings.php';</script>";
+            echo "<script>alert('✅ เพิ่มผู้ใช้งานเรียบร้อย'); window.location.href='../settings/';</script>";
         }
 
     } catch (PDOException $e) {
         // แสดง Error ชัดเจนเพื่อการ Debug
         echo "<h3>เกิดข้อผิดพลาดทางฐานข้อมูล:</h3>";
         echo "Error: " . $e->getMessage();
-        echo "<br><br><a href='../settings.php'>กลับไปหน้าตั้งค่า</a>";
+        echo "<br><br><a href='../settings/'>กลับไปหน้าตั้งค่า</a>";
     }
 } else {
     // ถ้าเข้าไฟล์นี้ตรงๆ โดยไม่ได้ Submit Form
-    header("Location: ../settings.php");
+    header("Location: ../settings/");
     exit;
 }
 ?>

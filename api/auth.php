@@ -3,8 +3,28 @@ session_start();
 require_once '../config/db.php';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // CSRF Protection: ตรวจสอบ Token
+    if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
+        echo "<script>
+            alert('❌ Security Check Failed (CSRF Token mismatch)'); 
+            window.location.href='../login.php';
+        </script>";
+        exit;
+    }
+
     $username = trim($_POST['username']);
     $password = $_POST['password'];
+
+    // Security: Validate username format to prevent injection attacks like Path Traversal.
+    // Allow only alphanumeric characters and underscores.
+    if (!preg_match('/^[a-zA-Z0-9_]+$/', $username)) {
+        // Invalid username format, treat as a failed login attempt.
+        echo "<script>
+            alert('❌ ชื่อผู้ใช้งาน หรือ รหัสผ่าน ไม่ถูกต้อง'); 
+            window.location.href='../login.php';
+        </script>";
+        exit;
+    }
 
     try {
         if (isset($pdo)) {
@@ -44,10 +64,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
     } catch (PDOException $e) {
-        echo "Database Error: " . $e->getMessage();
-    }
+    // เก็บ Error ลงไฟล์ log ของ server แทนการ show
+    error_log("Database Error: " . $e->getMessage());   
+    
+    // บอก user แค่นี้พอ
+    echo "<script>
+        alert('❌ เกิดข้อผิดพลาดในการเชื่อมต่อระบบ กรุณาลองใหม่ภายหลัง'); 
+        window.location.href='../login.php';
+    </script>";
+    exit;
+}
 } else {
-    // ถ้าเข้าไฟล์นี้โดยตรงให้ดีดกลับไปหน้า Login
+    // ถ้าไม่ใช่ POST request ให้Wกลับไปหน้า login
     header("Location: ../login.php");
     exit;
 }

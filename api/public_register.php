@@ -1,12 +1,32 @@
 <?php
+session_start();
 require_once '../config/db.php';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $fullname = trim($_POST['fullname']);
-    $department = trim($_POST['department']);
-    $username = trim($_POST['username']);
+    // CSRF Protection: ตรวจสอบ Token
+    if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
+        echo "<script>alert('❌ Security Check Failed (CSRF Token mismatch)'); window.history.back();</script>";
+        exit;
+    }
+
+    // Sanitization: ป้องกัน XSS โดยการลบ HTML Tags และตัดช่องว่าง
+    $fullname = trim(strip_tags($_POST['fullname'] ?? ''));
+    $department = trim(strip_tags($_POST['department'] ?? ''));
+    $username = trim(strip_tags($_POST['username'] ?? ''));
     $password = $_POST['password'];
     $confirm_password = $_POST['confirm_password'];
+
+    // Security: ป้องกัน Path Traversal (ห้ามมี .. ในข้อมูล)
+    if (strpos($fullname, '..') !== false || strpos($department, '..') !== false) {
+        echo "<script>alert('❌ ข้อมูลไม่ถูกต้อง (ห้ามมี ..)'); window.history.back();</script>";
+        exit;
+    }
+
+    // Validation: ตรวจสอบ Username (อนุญาตเฉพาะ A-Z, a-z, 0-9 และ _)
+    if (!preg_match('/^[a-zA-Z0-9_]+$/', $username)) {
+        echo "<script>alert('❌ Username ต้องประกอบด้วยตัวอักษรภาษาอังกฤษ ตัวเลข หรือ _ เท่านั้น'); window.history.back();</script>";
+        exit;
+    }
 
     // 1. ตรวจสอบรหัสผ่านตรงกันไหม
     if ($password !== $confirm_password) {

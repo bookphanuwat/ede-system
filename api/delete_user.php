@@ -15,6 +15,23 @@ if (isset($_GET['id'])) {
             exit;
         }
 
+        // 1.5 ป้องกันการลบ Admin คนสุดท้าย
+        // ตรวจสอบก่อนว่าผู้ใช้ที่จะลบเป็น Admin หรือไม่
+        $stmtRole = $pdo->prepare("SELECT r.role_name FROM users u JOIN roles r ON u.role_id = r.role_id WHERE u.user_id = ?");
+        $stmtRole->execute([$id]);
+        $targetUser = $stmtRole->fetch(PDO::FETCH_ASSOC);
+
+        if ($targetUser && stripos($targetUser['role_name'], 'admin') !== false) {
+            // ถ้าระบุว่าเป็น Admin ให้เช็คจำนวน Admin ทั้งหมดในระบบ
+            $stmtCount = $pdo->query("SELECT COUNT(*) FROM users u JOIN roles r ON u.role_id = r.role_id WHERE r.role_name LIKE '%Admin%'");
+            $adminCount = $stmtCount->fetchColumn();
+
+            if ($adminCount <= 1) {
+                echo "<script>alert('❌ ไม่สามารถลบได้ เนื่องจากเป็นผู้ดูแลระบบ (Admin) คนสุดท้ายของระบบ'); window.location.href='../settings.php';</script>";
+                exit;
+            }
+        }
+
         // เริ่มต้น Transaction (เพื่อให้ทำงานต่อเนื่องกัน ถ้าพลาดให้ยกเลิกหมด)
         $pdo->beginTransaction();
 

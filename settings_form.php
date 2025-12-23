@@ -1,32 +1,33 @@
 <?php 
 session_start();
-require_once 'config/db.php';
+require realpath( '../dv-config.php' );
+require DEV_PATH . '/classes/db.class.v2.php';
+require DEV_PATH . '/functions/global.php';
+
+// CSRF Protection: สร้าง Token ถ้ายังไม่มี
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
 
 // เตรียมตัวแปร
 $user_data = null;
 $is_edit = false;
 $roles = [];
 
-try {
-    if (isset($pdo)) {
-        // 1. ดึงรายการสิทธิ์ (Roles) ทั้งหมดจากฐานข้อมูล มาใส่ Dropdown
-        $stmt_roles = $pdo->query("SELECT * FROM roles ORDER BY role_id ASC");
-        $roles = $stmt_roles->fetchAll(PDO::FETCH_ASSOC);
+// 1. ดึงรายการสิทธิ์ (Roles) ทั้งหมดจากฐานข้อมูล มาใส่ Dropdown
+$sql_roles = "SELECT * FROM roles ORDER BY role_id ASC";
+$roles = CON::selectArrayDB([], $sql_roles) ?? [];
 
-        // 2. ถ้ามี ID ส่งมา ให้ดึงข้อมูลผู้ใช้นั้นมาแสดง (โหมดแก้ไข)
-        if (isset($_GET['id'])) {
-            $id = $_GET['id'];
-            $stmt = $pdo->prepare("SELECT * FROM users WHERE user_id = ?");
-            $stmt->execute([$id]);
-            $user_data = $stmt->fetch(PDO::FETCH_ASSOC);
-            
-            if ($user_data) {
-                $is_edit = true;
-            }
-        }
+// 2. ถ้ามี ID ส่งมา ให้ดึงข้อมูลผู้ใช้นั้นมาแสดง (โหมดแก้ไข)
+if (isset($_GET['id'])) {
+    $id = $_GET['id'];
+    $sql_user = "SELECT * FROM users WHERE user_id = ?";
+    $user_result = CON::selectArrayDB([$id], $sql_user);
+    
+    if (!empty($user_result)) {
+        $user_data = $user_result[0];
+        $is_edit = true;
     }
-} catch (PDOException $e) {
-    echo "Error: " . $e->getMessage();
 }
 ?>
 <!DOCTYPE html>
@@ -34,11 +35,12 @@ try {
 <head>
     <meta charset="UTF-8">
     <title><?php echo $is_edit ? 'แก้ไขผู้ใช้งาน' : 'เพิ่มผู้ใช้งานใหม่'; ?></title>
-    <!-- Bootstrap & CSS -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <link href="assets/css/style.css" rel="stylesheet">
+    <!-- CSS -->
+    <link rel="stylesheet" href="<?php echo ASSET_PATH; ?>/bootstrap/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="<?php echo ASSET_PATH; ?>/@fortawesome/fontawesome-free/css/all.css">
+    <link href="<?php echo SITE_URL;?>/css/main.min.css" rel="stylesheet">
+    
+    <script src="<?php echo ASSET_PATH; ?>/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
 </head>
 <body>
 
@@ -61,6 +63,9 @@ try {
                 <?php if ($is_edit): ?>
                     <input type="hidden" name="user_id" value="<?php echo $user_data['user_id']; ?>">
                 <?php endif; ?>
+
+                <!-- CSRF Token Field -->
+                <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
 
                 <!-- 1. Username (ห้ามแก้ถ้ามีอยู่แล้ว) -->
                 <div class="row mb-4 align-items-center">
@@ -126,7 +131,7 @@ try {
 
                 <!-- ปุ่มกด -->
                 <div class="d-flex justify-content-end mt-5 pt-3 border-top">
-                    <a href="settings.php" class="btn btn-danger rounded-pill px-4 me-2 shadow-sm text-decoration-none">
+                    <a href="settings/" class="btn btn-danger rounded-pill px-4 me-2 shadow-sm text-decoration-none">
                         <i class="fas fa-times me-2"></i>ยกเลิก
                     </a>
                     <button type="submit" class="btn btn-success rounded-pill px-5 shadow-sm" style="background-color: #00E676; border:none; color: #000; font-weight:600;">

@@ -105,9 +105,9 @@
     $docsRows = '';
     if ( count( $recent_docs ) > 0 ) {
         foreach ( $recent_docs as $doc ) {
-            $doc_code     = $doc['document_code'] ?? '';
-            $title        = $doc['title'] ?? '';
-            $type_name    = $doc['type_name'] ?? '-';
+            $doc_code     = htmlspecialchars($doc['document_code'] ?? '', ENT_QUOTES, 'UTF-8');
+            $title        = htmlspecialchars($doc['title'] ?? '', ENT_QUOTES, 'UTF-8');
+            $type_name    = htmlspecialchars($doc['type_name'] ?? '-', ENT_QUOTES, 'UTF-8');
             $created_at   = date( 'd/m/Y H:i', strtotime( $doc['created_at'] ?? '' ) );
             $view_count   = number_format( $doc['view_count'] ?? 0 );
             $status_badge = getStatusBadge( $doc['current_status'] ?? '', $workflow_colors );
