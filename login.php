@@ -1,3 +1,9 @@
+<?php
+session_start();
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+?>
 <!DOCTYPE html>
 <html lang="th">
 <head>
@@ -39,6 +45,7 @@
         <div id="loginForm" class="form-section">
             <h5 class="mb-3 text-secondary">เข้าสู่ระบบ</h5>
             <form action="api/auth.php" method="POST">
+                <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
                 <input type="text" name="username" class="form-control" placeholder="ชื่อผู้ใช้งาน" required>
                 <input type="password" name="password" class="form-control" placeholder="รหัสผ่าน" required>
 
@@ -55,6 +62,7 @@
         <div id="registerForm" class="form-section hidden">
             <h5 class="mb-3 text-info">สมัครสมาชิกใหม่</h5>
             <form action="api/public_register.php" method="POST">
+                <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
                 <input type="text" name="fullname" class="form-control" placeholder="ชื่อ-นามสกุล" required>
                 <input type="text" name="department" class="form-control" placeholder="แผนก/หน่วยงาน" required>
                 <input type="text" name="username" class="form-control" placeholder="กำหนดชื่อผู้ใช้งาน (Username)" required>

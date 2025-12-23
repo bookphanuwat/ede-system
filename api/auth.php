@@ -44,6 +44,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
                 // --- Login สำเร็จ ---
                 
+                // Security: ป้องกัน Session Fixation Attack โดยการเปลี่ยน Session ID ใหม่เมื่อ Login ผ่าน
+                session_regenerate_id(true);
+                
                 // เก็บข้อมูลลง Session เพื่อนำไปใช้ในหน้าอื่นๆ
                 $_SESSION['user_id'] = $user['user_id'];
                 $_SESSION['username'] = $user['username'];

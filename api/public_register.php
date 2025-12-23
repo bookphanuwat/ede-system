@@ -66,7 +66,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </script>";
         }
     } catch (PDOException $e) {
-        echo "Error: " . $e->getMessage();
+        // Security: ไม่ควรแสดง Error ของ Database โดยตรง (Information Disclosure) ให้เก็บลง Log แทน
+        error_log("Register Error: " . $e->getMessage());
+        echo "<script>
+            alert('❌ เกิดข้อผิดพลาดในการบันทึกข้อมูล กรุณาลองใหม่ภายหลัง'); 
+            window.history.back();
+        </script>";
     }
 } else {
     header("Location: ../login.php");
