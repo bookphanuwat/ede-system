@@ -26,7 +26,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $password = $_POST['password'] ?? '';
     $role_id = $_POST['role_id'];
-
+    if (empty($role_id)) {
+        echo "<script>alert('❌ กรุณาเลือกสิทธิ์การใช้งาน (Role)'); window.history.back();</script>";
+        exit;
+    }
     try {
         if ($user_id) {
             // --- กรณีแก้ไข (Update) ---
