@@ -1,5 +1,8 @@
 <?php
 session_start();
+// ปิดการแสดง error ผ่าน API response
+ini_set('display_errors', 0);
+ini_set('display_startup_errors', 0);
 error_reporting( E_ALL ^ E_NOTICE );
 mb_internal_encoding( 'UTF-8' );
 

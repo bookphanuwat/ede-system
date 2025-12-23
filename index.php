@@ -6,8 +6,10 @@
     // 2. ปรับบรรทัด Content-Security-Policy โดยเพิ่ม frame-ancestors 'self'; เข้าไปท้ายสุด (ก่อนปิด quote)
     header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://cdn.jsdelivr.net https://static.line-scdn.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'self';");
     
-    error_reporting( E_ALL );
-    //error_reporting( E_ERROR | E_WARNING | E_PARSE );
+    // ปิดการแสดง error หน้าเว็บ (Security Fix)
+    ini_set('display_errors', 0); 
+    ini_set('display_startup_errors', 0);
+    error_reporting(E_ALL); // ให้ระบบยังรับรู้ error เพื่อลง log (ถ้า server ตั้งค่าไว้) แต่ไม่โชว์ user
 
     // ตรวจสอบการ login
     // if ( !isset( $_SESSION['user_id'] ) && $_GET['dev'] != 'liffscan' ) {
