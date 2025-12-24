@@ -9,7 +9,7 @@ let currentDocWorkflowId = "cat_default";
 // ฟังก์ชัน Bypass Cache
 const originalFetch = window.fetch;
 window.fetch = function(url, options) {
-    if (url.toString().startsWith("https://liffsdk.line-scdn.net/xlt/") && url.toString().endsWith(".json")) {
+    if (url && url.toString().startsWith("https://liffsdk.line-scdn.net/xlt/") && url.toString().endsWith(".json")) {
         console.log("Bypassing LIFF Cache:", url);
         url = url + "?ts=" + Math.random();
     }

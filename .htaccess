@@ -21,7 +21,8 @@ RewriteRule ^([0-9a-z-]+)/?$ index.php?dev=$1 [QSA]
   Header always set X-Frame-Options "SAMEORIGIN"
 
   # 2. แก้ไขบรรทัด Content-Security-Policy เดิม โดยเพิ่ม "frame-ancestors 'self';" เข้าไปใน string
-  Header set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://cdn.jsdelivr.net https://static.line-scdn.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com; img-src 'self' data: https://api.qrserver.com; connect-src 'self'; frame-ancestors 'self';" 
+# 2. ตั้งค่า CSP ให้รองรับ LINE LIFF (สังเกต connect-src และ img-src)
+  Header set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://cdn.jsdelivr.net https://static.line-scdn.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com; img-src 'self' data: https://api.qrserver.com https://*.line-scdn.net; connect-src 'self' https://*.line.me https://*.line-scdn.net; frame-ancestors 'self';"
   # mod_headers can't match by content-type, but we don't want to send this header on *everything*...
   <FilesMatch "\.(appcache|crx|css|eot|gif|htc|ico|jpe?g|js|m4a|m4v|manifest|mp4|oex|oga|ogg|ogv|otf|pdf|png|safariextz|svg|svgz|ttf|vcf|webm|webp|woff|xml|xpi)$">
     Header unset X-UA-Compatible

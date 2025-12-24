@@ -9,9 +9,7 @@
     header("X-Frame-Options: SAMEORIGIN");
 
     // 2. ปรับบรรทัด Content-Security-Policy โดยเพิ่ม frame-ancestors 'self'; เข้าไปท้ายสุด (ก่อนปิด quote)
-    header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://cdn.jsdelivr.net https://static.line-scdn.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com; img-src 'self' data: https://api.qrserver.com; connect-src 'self'; frame-ancestors 'self';");
-    
-    // ปิดการแสดง error หน้าเว็บ (Security Fix)
+// [แก้ไข] เพิ่ม https://*.line.me และ https://*.line-scdn.net ใน connect-src และ img-src    // ปิดการแสดง error หน้าเว็บ (Security Fix)
     ini_set('display_errors', 0); 
     ini_set('display_startup_errors', 0);
     error_reporting(E_ALL); // ให้ระบบยังรับรู้ error เพื่อลง log (ถ้า server ตั้งค่าไว้) แต่ไม่โชว์ user
@@ -53,6 +51,11 @@
     <!-- <link rel="stylesheet" href="<?php echo ASSET_PATH; ?>/fonts/maledpan/maledpan.css">
     <link rel="stylesheet" href="<?php echo ASSET_PATH; ?>/fonts/chatthai/chatthai.css"> -->
     <link href="<?php echo SITE_URL;?>/css/main.min.css" rel="stylesheet">
+    <script src="https://unpkg.com/vconsole@latest/dist/vconsole.min.js"></script>
+<script>
+     // VConsole will be exported to `window.VConsole` by default.
+  var vConsole = new window.VConsole();
+</script>
 </head>
 
 <body>
