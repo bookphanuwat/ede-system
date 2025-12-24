@@ -1,28 +1,36 @@
 <?php
     // เพิ่มการตั้งค่า Cookie ก่อน session_start()
-    ini_set('session.cookie_httponly', 1); // แก้ปัญหา HttpOnly Flag
-    ini_set('session.cookie_secure', 1);   // แนะนำ: เพราะเว็บคุณใช้ https://
-    ini_set('session.use_only_cookies', 1); // ป้องกันการโจมตี session fixation
+    ini_set('session.cookie_httponly', 1); 
+    ini_set('session.cookie_secure', 1);   
+    ini_set('session.use_only_cookies', 1); 
     session_start();
-    ob_start(); // <--- 1. เพิ่มบรรทัดนี้ครับ (สำคัญมาก)
-    // 1. เพิ่มบรรทัดนี้
+    ob_start(); 
+    
     header("X-Frame-Options: SAMEORIGIN");
+    // [แก้ไข] CSP settings ... (คงเดิม)
 
-    // 2. ปรับบรรทัด Content-Security-Policy โดยเพิ่ม frame-ancestors 'self'; เข้าไปท้ายสุด (ก่อนปิด quote)
-// [แก้ไข] เพิ่ม https://*.line.me และ https://*.line-scdn.net ใน connect-src และ img-src    // ปิดการแสดง error หน้าเว็บ (Security Fix)
     ini_set('display_errors', 0); 
     ini_set('display_startup_errors', 0);
-    error_reporting(E_ALL); // ให้ระบบยังรับรู้ error เพื่อลง log (ถ้า server ตั้งค่าไว้) แต่ไม่โชว์ user
+    error_reporting(E_ALL); 
 
-    // ตรวจสอบการ login
-    // if ( !isset( $_SESSION['user_id'] ) && $_GET['dev'] != 'liffscan' ) {
-    //     header( "Location: login.php" );
-    //     exit;
-    // }
+    // ------------------------------------------------------------------------
+    // [แก้ไข] ส่วนตรวจสอบการ Login (เปิดใช้งานและปรับปรุงโค้ด)
+    // ------------------------------------------------------------------------
+    // ตรวจสอบว่ามี user_id ใน Session หรือไม่ 
+    // และยกเว้นการตรวจสอบถ้าเข้ามาผ่านโหมด 'liffscan' (ถ้าจำเป็นต้องเปิดสาธารณะ)
+    $dev_mode = isset($_GET['dev']) ? $_GET['dev'] : '';
+    
+    if ( !isset( $_SESSION['user_id'] ) && $dev_mode !== 'liffscan' ) {
+        header( "Location: login.php" );
+        exit;
+    }
+    // ------------------------------------------------------------------------
+
     require realpath( '../dv-config.php' );
     require DEV_PATH . '/classes/db.class.v2.php';
     require DEV_PATH . '/functions/global.php';
-    // require_once realpath('config/db.php');
+
+    // ... ส่วนที่เหลือคงเดิม ...
 
     // สำหรับ dev parameter (อนุญาตเฉพาะ alphanumeric)
     $GET_DEV = sanitizeGetParam( 'dev', 'alphanumeric', '', 50 );

@@ -2,8 +2,19 @@
 ini_set('session.cookie_httponly', 1);
 ini_set('session.cookie_secure', 1);
 session_start();
-// 1. เพิ่มบรรทัดนี้
+
+// ------------------------------------------------------------------------
+// [เพิ่ม] ถ้ามี Session User อยู่แล้ว ให้ Redirect ไปหน้า Dashboard เลย
+// ------------------------------------------------------------------------
+if (isset($_SESSION['user_id'])) {
+    header("Location: index.php");
+    exit;
+}
+// ------------------------------------------------------------------------
+
 header("X-Frame-Options: SAMEORIGIN");
+
+// ... ส่วนที่เหลือคงเดิม ...
 
 // 2. ปรับบรรทัด Content-Security-Policy โดยเพิ่ม frame-ancestors 'self';
 header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://cdn.jsdelivr.net https://static.line-scdn.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com; img-src 'self' data: https://api.qrserver.com; connect-src 'self'; frame-ancestors 'self';");
