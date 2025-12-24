@@ -4,6 +4,11 @@ ini_set('session.cookie_secure', 1);
 session_start();
 require_once '../config/db.php'; 
 
+// ✅ FIX 2: เพิ่มการตรวจสอบสิทธิ์ Admin ก่อนเริ่มทำงาน
+if (empty($_SESSION['user_id']) || empty($_SESSION['role']) || $_SESSION['role'] !== 'Administrator') {
+    die("❌ Access Denied: คุณไม่มีสิทธิ์จัดการข้อมูลผู้ใช้งาน");
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // CSRF Protection
     if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {

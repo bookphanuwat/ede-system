@@ -5,14 +5,18 @@ session_start();
 require_once '../config/db.php';
 
 // ตรวจสอบสิทธิ์ (ถ้ามีระบบ Login แล้ว ควรเปิดบรรทัดนี้)
-// if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'Admin') { die("Access Denied"); }
+ if (empty($_SESSION['user_id']) || empty($_SESSION['role']) || $_SESSION['role'] !== 'Administrator') { 
+    // ถ้าไม่ใช่ Admin ให้ดีดออกทันที
+    header("Location: ../login.php");
+    exit;
+}
 
 if (isset($_GET['id'])) {
     $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 
 if ($id <= 0) {
     // จัดการเมื่อ ID ไม่ถูกต้อง เช่น redirect กลับ
-    header("Location: ../settings.php");
+    header("Location: ../settings");
     exit;
 }
 
