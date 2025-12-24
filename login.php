@@ -11,13 +11,9 @@ if (isset($_SESSION['user_id'])) {
     exit;
 }
 // ------------------------------------------------------------------------
-
-header("X-Frame-Options: SAMEORIGIN");
-
 // ... ส่วนที่เหลือคงเดิม ...
 
 // 2. ปรับบรรทัด Content-Security-Policy โดยเพิ่ม frame-ancestors 'self';
-header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://cdn.jsdelivr.net https://static.line-scdn.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com; img-src 'self' data: https://api.qrserver.com; connect-src 'self'; frame-ancestors 'self';");
 if (empty($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
@@ -72,7 +68,7 @@ if (empty($_SESSION['csrf_token'])) {
                 </button>
             </form>
             <div class="text-muted small">
-                ยังไม่มีบัญชี? <span onclick="toggleForm()" class="toggle-link">สมัครสมาชิก</span>
+                ยังไม่มีบัญชี? <span id="btnToRegister" class="toggle-link">สมัครสมาชิก</span>
             </div>
         </div>
 
@@ -92,7 +88,7 @@ if (empty($_SESSION['csrf_token'])) {
                 </button>
             </form>
             <div class="text-muted small">
-                มีบัญชีอยู่แล้ว? <span onclick="toggleForm()" class="toggle-link" style="color: #29B6F6;">เข้าสู่ระบบ</span>
+                มีบัญชีอยู่แล้ว? <span id="btnToLogin" class="toggle-link" style="color: #29B6F6;">เข้าสู่ระบบ</span>
             </div>
         </div>
 
@@ -102,22 +98,35 @@ if (empty($_SESSION['csrf_token'])) {
     </div>
 
     <script>
-        // ฟังก์ชันสลับฟอร์ม
-        function toggleForm() {
-            const loginForm = document.getElementById('loginForm');
-            const registerForm = document.getElementById('registerForm');
+    document.addEventListener('DOMContentLoaded', function() {
+        const loginForm = document.getElementById('loginForm');
+        const registerForm = document.getElementById('registerForm');
+        const btnToRegister = document.getElementById('btnToRegister');
+        const btnToLogin = document.getElementById('btnToLogin');
 
+        // ฟังก์ชันสำหรับสลับฟอร์ม
+        function switchForm() {
             if (loginForm.classList.contains('hidden')) {
-                // แสดง Login
+                // ถ้า Login ซ่อนอยู่ -> ให้แสดง Login, ซ่อน Register
                 loginForm.classList.remove('hidden');
                 registerForm.classList.add('hidden');
             } else {
-                // แสดง Register
+                // ถ้า Login แสดงอยู่ -> ให้ซ่อน Login, แสดง Register
                 loginForm.classList.add('hidden');
                 registerForm.classList.remove('hidden');
             }
         }
-    </script>
+
+        // ผูกปุ่มกับการทำงาน
+        if (btnToRegister) {
+            btnToRegister.addEventListener('click', switchForm);
+        }
+        
+        if (btnToLogin) {
+            btnToLogin.addEventListener('click', switchForm);
+        }
+    });
+</script>
 
 </body>
 </html>
