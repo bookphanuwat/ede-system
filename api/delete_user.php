@@ -8,7 +8,13 @@ require_once '../config/db.php';
 // if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'Admin') { die("Access Denied"); }
 
 if (isset($_GET['id'])) {
-    $id = $_GET['id'];
+    $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+
+if ($id <= 0) {
+    // จัดการเมื่อ ID ไม่ถูกต้อง เช่น redirect กลับ
+    header("Location: ../settings.php");
+    exit;
+}
 
     try {
         // 1. ห้ามลบตัวเอง

@@ -252,12 +252,18 @@ switch ( $GET_DEV ) {
             $json_data['status']  = 'error';
             $json_data['message'] = 'ระบุคำค้นหา';
         } else {
+            // [Security Fix] Escape ตัวอักษร % และ _ เพื่อป้องกัน Wildcard Injection
+            $keyword_safe = addcslashes($keyword, "%_");
+
             $sql = "SELECT d.*, dt.type_name 
                     FROM documents d
                     LEFT JOIN document_type dt ON d.type_id = dt.type_id
                     WHERE d.document_code LIKE ? OR d.title LIKE ?
                     ORDER BY d.created_at DESC LIMIT 10";
-            $params = ["%$keyword%", "%$keyword%"];
+            
+            // ใช้ตัวแปรที่ escape แล้ว
+            $params = ["%$keyword_safe%", "%$keyword_safe%"];
+            
             $json_data['data']   = CON::selectArrayDB( $params, $sql );
             $json_data['status'] = 'success';
         }
@@ -317,19 +323,24 @@ switch ( $GET_DEV ) {
     case 'update-status':
         // 1. รับค่าจาก POST Data
         $inputData = $_POST;
-        // รองรับ JSON Body
         $contentType = $_SERVER["CONTENT_TYPE"] ?? '';
         if (stripos($contentType, 'application/json') !== false) {
             $inputData = json_decode(file_get_contents('php://input'), true) ?? [];
         }
 
-        $doc_code      = $inputData['doc_code'] ?? '';
-        $new_status    = $inputData['status'] ?? 'Received';
-        $next_receiver = $inputData['receiver_name'] ?? '';
-        $line_user_id  = $inputData['line_user_id'] ?? '';
-        $device_info   = $inputData['device_info'] ?? 'Unknown';
-        $display_name  = $inputData['display_name'] ?? 'Unknown User';
-        $picture_url   = $inputData['picture_url'] ?? '';
+        // [Security Fix] ฟังก์ชันสำหรับทำความสะอาดข้อมูล (ป้องกัน XSS)
+        function clean_input($data) {
+            return htmlspecialchars(trim($data ?? ''), ENT_QUOTES, 'UTF-8');
+        }
+
+        // ใช้ clean_input กับทุกค่าที่เป็น String ที่รับเข้ามา
+        $doc_code      = clean_input($inputData['doc_code'] ?? '');
+        $new_status    = clean_input($inputData['status'] ?? 'Received');
+        $next_receiver = clean_input($inputData['receiver_name'] ?? '');
+        $line_user_id  = clean_input($inputData['line_user_id'] ?? ''); // ปกติเป็น ID แต่อาจเป็น string ได้
+        $device_info   = clean_input($inputData['device_info'] ?? 'Unknown');
+        $display_name  = clean_input($inputData['display_name'] ?? 'Unknown User');
+        $picture_url   = clean_input($inputData['picture_url'] ?? ''); // URL ควร validate เพิ่มว่าเป็น URL จริงไหม แต่เบื้องต้น clean_input ก็พอ
 
         // หา IP Address
         $ip_address = $_SERVER['HTTP_CLIENT_IP'] ?? $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? '';
