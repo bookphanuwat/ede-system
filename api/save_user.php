@@ -10,24 +10,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         die("Error: Invalid CSRF Token");
     }
 
-    // ✅ FIX 1: Type Casting (บังคับเป็นตัวเลข) ป้องกัน SQL Injection ทุกรูปแบบในตัวแปรนี้
-    // ถ้าส่ง script หรือ sql มา จะถูกเปลี่ยนเป็น 0 ทันที
+    // ✅ FIX 1: Type Casting (บังคับเป็นตัวเลข)
     $user_id = isset($_POST['user_id']) && $_POST['user_id'] !== '' ? (int)$_POST['user_id'] : null;
     
-    // Sanitization
-    $username = trim(strip_tags($_POST['username'] ?? ''));
-    $fullname = trim(strip_tags($_POST['fullname'] ?? ''));
-    $department = trim(strip_tags($_POST['department'] ?? ''));
+    // Helper Function: ทำความสะอาดข้อมูลและป้องกัน Path Traversal
+    function sanitizeInput($data) {
+        // 1. ลบ Null Bytes (%00) ที่อาจใช้หลบเลี่ยงการตรวจสอบนามสกุลไฟล์
+        $data = str_replace(chr(0), '', $data);
+        // 2. ลบ HTML Tags และช่องว่างหัวท้าย
+        $data = trim(strip_tags($data ?? ''));
+        return $data;
+    }
 
-    // Security: Path Traversal
-    if (strpos($fullname, '..') !== false || strpos($department, '..') !== false) {
-        echo "<script>alert('❌ ข้อมูลไม่ถูกต้อง'); window.history.back();</script>";
+    // รับค่าและ Sanitize
+    $username   = sanitizeInput($_POST['username']);
+    $fullname   = sanitizeInput($_POST['fullname']);
+    $department = sanitizeInput($_POST['department']);
+
+    // ✅ FIX 2: Security check for Path Traversal (High Severity Fix)
+    // ตรวจสอบว่ามีอักขระอันตรายที่ใช้ระบุ Path หรือไม่ (.. หรือ / หรือ \)
+    // การใช้ preg_match จะครอบคลุมกว่า strpos และป้องกันการอ้างอิง directory
+    if (preg_match('/(\.\.|[\/\\\\])/', $fullname) || preg_match('/(\.\.|[\/\\\\])/', $department)) {
+        // บันทึก Log เพื่อติดตามผู้พยายามโจมตี (Optional)
+        error_log("Security Warning: Path Traversal attempt detected from IP " . $_SERVER['REMOTE_ADDR']);
+        
+        echo "<script>
+            alert('❌ ข้อมูลไม่ถูกต้อง: ห้ามใช้อักขระพิเศษที่เกี่ยวข้องกับ Path (เช่น / หรือ \\ )'); 
+            window.history.back();
+        </script>";
         exit;
     }
 
     $password = $_POST['password'] ?? '';
     
-    // ✅ FIX 2: Type Casting role_id ต้องเป็นตัวเลขเท่านั้น
+    // ✅ FIX 3: Type Casting role_id
     $role_id = isset($_POST['role_id']) ? (int)$_POST['role_id'] : 0;
 
     if (empty($role_id)) {
@@ -52,7 +68,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             // --- กรณีเพิ่มใหม่ (Insert) ---
             
-            // Validation Username
+            // Validation Username (Allow List: A-Z, 0-9, _)
             if (!preg_match('/^[a-zA-Z0-9_]+$/', $username)) {
                 echo "<script>alert('❌ Username ไม่ถูกต้อง (A-Z, 0-9, _)'); window.history.back();</script>";
                 exit;
@@ -78,7 +94,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
     } catch (PDOException $e) {
-        // ✅ FIX 3: ไม่แสดง Error จริงหน้าเว็บ (ป้องกัน Information Disclosure)
+        // ไม่แสดง Error จริงหน้าเว็บ
         error_log("Database Error in save_user.php: " . $e->getMessage());
         echo "<script>alert('❌ เกิดข้อผิดพลาดทางฐานข้อมูล กรุณาติดต่อผู้ดูแลระบบ'); window.history.back();</script>";
     }
