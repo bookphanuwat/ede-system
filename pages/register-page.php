@@ -4,20 +4,46 @@
     include 'includes/topbar.php';
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
-        // 1. รับค่าจากฟอร์ม
-        $title = $_POST['title'];
-        $type_id = $_POST['type_id'];
-        $reference_no = $_POST['reference_no'];
-        $sender_name = $_POST['sender_name'];
-        $receiver_name = $_POST['receiver_name'];
-        $created_by = $_POST['created_by'];
+        // ------------------------------------------------------------------
+        // [Security Fix] 1. Sanitize & Validate Inputs
+        // ป้องกัน SQL Injection และ XSS เบื้องต้นโดยการกรองข้อมูล
+        // ------------------------------------------------------------------
+        
+        // ฟังก์ชันสำหรับทำความสะอาดข้อมูลพื้นฐาน
+        function clean_input($data) {
+            $data = trim($data);
+            $data = stripslashes($data);
+            $data = htmlspecialchars($data, ENT_QUOTES, 'UTF-8');
+            return $data;
+        }
 
-        // [แก้ไข 1] รับค่า workflow_id (สำคัญมากสำหรับการระบุหมวดหมู่สถานะ)
-        // ถ้าไม่มีค่าส่งมา ให้ใช้ 'cat_default' (General)
-        $workflow_id = !empty($_POST['workflow_id']) ? $_POST['workflow_id'] : 'cat_default';
+        // รับค่าและกรองข้อมูล
+        $title          = clean_input($_POST['title']);
+        $reference_no   = clean_input($_POST['reference_no']);
+        $sender_name    = clean_input($_POST['sender_name']);
+        
+        // Type ID ควรเป็นตัวเลขเท่านั้น
+        $type_id        = filter_var($_POST['type_id'], FILTER_SANITIZE_NUMBER_INT);
+        
+        // Created By ควรเป็นตัวเลข (User ID)
+        $created_by     = filter_var($_POST['created_by'], FILTER_SANITIZE_NUMBER_INT);
 
-        // รับค่าสถานะเริ่มต้นจาก Workflow
-        $initial_status = !empty($_POST['current_status']) ? $_POST['current_status'] : 'ลงทะเบียนใหม่';
+        // Workflow ID และ Status ไม่ควรมีอักขระพิเศษแปลกปลอม (เช่น วงเล็บ, single quote)
+        $raw_workflow_id = !empty($_POST['workflow_id']) ? $_POST['workflow_id'] : 'cat_default';
+        $raw_status      = !empty($_POST['current_status']) ? $_POST['current_status'] : 'ลงทะเบียนใหม่';
+
+        // ใช้ Regex ยอมรับเฉพาะตัวอักษร ตัวเลข ขีดล่าง ขีดกลาง และภาษาไทย (ป้องกันการใส่ Function SQL)
+        if (!preg_match("/^[a-zA-Z0-9_\-\.\p{Thai}\s]+$/u", $raw_workflow_id)) {
+             $raw_workflow_id = 'cat_default'; // ค่า Default หากพบอักขระอันตราย
+        }
+        $workflow_id = $raw_workflow_id;
+
+        if (!preg_match("/^[a-zA-Z0-9_\-\.\p{Thai}\s]+$/u", $raw_status)) {
+             $raw_status = 'ลงทะเบียนใหม่'; // ค่า Default หากพบอักขระอันตราย
+        }
+        $initial_status = $raw_status;
+
+        $receiver_name  = '-'; // ตาม Form hidden value
 
         // ------------------------------------------------------------------
         // 2. สร้างรหัสเอกสาร (System Code)
@@ -26,7 +52,8 @@
         $document_code = "EDE-" . date("Ymd") . "-" . strtoupper($uuid_part) . rand(10,99);
 
         // 3. บันทึกลงฐานข้อมูล
-        // [แก้ไข 2] เพิ่ม workflow_id เข้าไปในคำสั่ง SQL
+        // [ตรวจสอบ] ตรวจสอบไฟล์ classes/db.class.v2.php ว่าฟังก์ชัน updateDB ใช้ $pdo->prepare() จริงหรือไม่
+        
         $sql = "INSERT INTO documents (document_code, title, type_id, reference_no, sender_name, receiver_name, created_by, current_status, workflow_id)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
@@ -39,7 +66,7 @@
             $receiver_name,
             $created_by,
             $initial_status,
-            $workflow_id // [แก้ไข 3] ส่งค่า workflow_id ไปบันทึก
+            $workflow_id
         ];
         CON::updateDB( $params, $sql );
 
