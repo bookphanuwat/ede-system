@@ -2,14 +2,15 @@
 @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600&display=swap');
 
 :root {
-    --color-dashboard: #29B6F6; /* ฟ้า */
-    --color-register:  #FFB74D; /* ส้ม */
-    --color-tracking:  #66BB6A; /* เขียว */
-    --color-report:    #EF5350; /* แดง */
-    --color-settings:  #7E57C2; /* ม่วง */
-
-    /* --- สีใหม่สำหรับจัดการสถานะ --- */
-    --color-status:    #FFD740; /* เหลืองทอง (Amber Accent) */
+    --color-dashboard: #29B6F6;
+    --color-register:  #FFB74D;
+    --color-tracking:  #66BB6A;
+    --color-report:    #EF5350;
+    --color-settings:  #7E57C2;
+    --color-status:    #FFD740;
+    
+    /* --- สีใหม่สำหรับประวัติการสแกน --- */
+    --color-scan-history: #19422b; 
 }
 
 body {
@@ -43,8 +44,9 @@ body {
 .btn-tracking  { background-color: var(--color-tracking); }
 .btn-report    { background-color: var(--color-report); }
 .btn-settings  { background-color: var(--color-settings); }
+.btn-scan-history { background-color: var(--color-scan-history); color: #fff; }
 
-/* ปุ่มจัดการสถานะ (สีเหลือง ตัวหนังสือสีเข้ม) */
+/* ปุ่มจัดการสถานะ */
 .btn-status_settings {
     background-color: var(--color-status);
     color: #444;
@@ -55,16 +57,22 @@ body {
 /* Layout & Header */
 .content-wrapper { width: 100%; margin-left: 260px; display: flex; flex-direction: column; min-height: 100vh; }
 
-/* Header Colors */
 .header-dashboard { background-color: var(--color-dashboard); }
 .header-register  { background-color: var(--color-register); }
 .header-tracking  { background-color: var(--color-tracking); }
 .header-report    { background-color: var(--color-report); }
 .header-settings  { background-color: var(--color-settings); }
 
-.header-status    {
-    background-color: var(--color-status); color: #444 !important; /* Header สีเหลือง */
-    .text-white { color: #444 !important; } /* ปรับสีตัวอักษรใน Header ให้เข้ม */
+/* --- แก้ไข Syntax ที่ผิดตรงนี้ --- */
+.header-status {
+    background-color: var(--color-status);
+    color: #444 !important;
+    
+    .text-white { color: #444 !important; }
+}
+
+.header-scan-history { 
+    background-color: var(--color-scan-history); 
 }
 
 .page-content { padding: 40px; background-color: #fff; flex-grow: 1; border-radius: 20px 0 0 0; margin-top: -1px; }

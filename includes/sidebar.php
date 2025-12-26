@@ -33,9 +33,11 @@
     <a href="<?php echo SITE_URL; ?>/settings/" class="nav-btn btn-settings">
         <i class="fas fa-cog"></i> ตั้งค่า
     </a>
-    <a href="<?php echo SITE_URL; ?>/scan-history/" class="nav-btn btn-settings">
+    
+    <a href="<?php echo SITE_URL; ?>/scan-history/" class="nav-btn btn-scan-history">
         <i class="fas fa-history"></i> ประวัติการสแกน
     </a>
+    
     <a href="<?php echo SITE_URL; ?>/workflow-settings/" class="nav-btn btn-status_settings">
         <i class="fas fa-project-diagram"></i> จัดการ สถานะ
     </a>

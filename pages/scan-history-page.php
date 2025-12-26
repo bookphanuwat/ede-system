@@ -1,6 +1,6 @@
 <?php
     $page_title   = "ประวัติการทำงานของคุณ";
-    $header_class = "header-dashboard";
+    $header_class = "header-scan-history"; // ใช้ Class สีใหม่
     include 'includes/topbar.php';
 
     // ---------------------------------------------------------
@@ -13,7 +13,7 @@
         $doc_id = $_GET['doc_id'];
         $response = ['success' => false];
 
-        // 1. ดึงรายละเอียดเอกสาร (Document Details)
+        // 1. ดึงรายละเอียดเอกสาร
         $sql_doc = "SELECT d.*, dt.type_name 
                     FROM documents d 
                     LEFT JOIN document_type dt ON d.type_id = dt.type_id 
@@ -33,8 +33,7 @@
                 'view_count' => number_format($d['view_count'] ?? 0)
             ];
 
-            // 2. ดึงประวัติ Timeline (History)
-            // ใช้ l.* ไว้หลังเพื่อให้ค่าหลักยึดตาม Log
+            // 2. ดึงประวัติ Timeline
             $sql_hist = "SELECT u.*, l.* FROM document_status_log l 
                          LEFT JOIN users u ON l.action_by = u.user_id 
                          WHERE l.document_id = ? 
@@ -46,64 +45,34 @@
                 foreach ($histData as $h) {
                     $h_time = date('d/m/Y H:i', strtotime($h['action_time']));
                     
-                    // ---------------------------------------------------------
-                    // Identity Detection (ระบบค้นหาชื่อแบบละเอียด)
-                    // ---------------------------------------------------------
+                    // --- Identity Detection ---
                     $found_name = '';
-
-                    // 1. ลองหาจาก Snapshot ใน Log ก่อน (แม่นยำที่สุด ณ เวลาที่บันทึก)
                     if (!empty($h['actor_name_snapshot'])) {
                         $found_name = $h['actor_name_snapshot'];
-                    }
-                    // 2. ถ้าไม่มี Snapshot ให้ลองหาจากคอลัมน์ต่างๆ ที่ Join มาได้
-                    elseif (!empty($h['first_name'])) {
+                    } elseif (!empty($h['first_name'])) {
                         $found_name = $h['first_name'] . ' ' . ($h['last_name'] ?? '');
                     } elseif (!empty($h['name'])) {
                         $found_name = $h['name'];
                     } elseif (!empty($h['username'])) {
                         $found_name = $h['username'];
-                    } elseif (!empty($h['fullname'])) { // เผื่อใช้ชื่อ fullname
-                        $found_name = $h['fullname'];
-                    } elseif (!empty($h['eng_name'])) { // เผื่อใช้ชื่อภาษาอังกฤษ
-                        $found_name = $h['eng_name'];
                     }
                     
-                    // 3. ถ้ายังไม่เจอ ลองเช็คว่าเป็นตัวเองหรือไม่ (ดึงจาก Session)
                     if (empty($found_name) && isset($_SESSION['user_id']) && isset($h['action_by'])) {
                         if ($h['action_by'] == $_SESSION['user_id']) {
-                            // ลองหาชื่อใน Session
                             if (!empty($_SESSION['user_name'])) $found_name = $_SESSION['user_name'] . " (คุณ)";
                             elseif (!empty($_SESSION['name'])) $found_name = $_SESSION['name'] . " (คุณ)";
-                            elseif (!empty($_SESSION['first_name'])) $found_name = $_SESSION['first_name'] . " (คุณ)";
                         }
                     }
 
-                    // 4. กำหนดค่าที่จะแสดงผลสุดท้าย
-                    if (!empty($found_name)) {
-                        $user_name = $found_name;
-                    } else {
-                        // กรณีหาไม่เจอจริงๆ
-                        $uid = $h['action_by'] ?? '';
-                        if (empty($uid) || $uid == 0) {
-                            $user_name = "ไม่ระบุ (System)";
-                        } else {
-                            $user_name = "User ID: $uid"; 
-                        }
-                    }
+                    $user_name = !empty($found_name) ? $found_name : "User ID: " . ($h['action_by'] ?? 'Unknown');
                     
                     // Image Check
                     $img_src = '';
-                    // 1. ลองหาจาก Snapshot รูปภาพใน Log ก่อน
-                    if (!empty($h['actor_pic_snapshot'])) {
-                        $img_src = $h['actor_pic_snapshot'];
-                    }
-                    // 2. ถ้าไม่มี Snapshot ให้ลองหาจากคอลัมน์ต่างๆ
+                    if (!empty($h['actor_pic_snapshot'])) $img_src = $h['actor_pic_snapshot'];
                     elseif (!empty($h['profile_img'])) $img_src = $h['profile_img'];
                     elseif (!empty($h['image'])) $img_src = $h['image'];
-                    elseif (!empty($h['avatar'])) $img_src = $h['avatar']; // เพิ่ม avatar
+                    elseif (!empty($h['avatar'])) $img_src = $h['avatar'];
                     
-                    // Icon/Image HTML
-                    // ปรับปรุง: ลบ file_exists ออกเพื่อให้แสดงผลรูปได้แม้ Path ใน Server จะหาไม่เจอ
                     if (!empty($img_src)) {
                         $user_icon = "
                         <div class='me-2 position-relative' style='width:35px; height:35px;'>
@@ -119,9 +88,8 @@
 
                     $h_status = htmlspecialchars($h['status'] ?? '-', ENT_QUOTES, 'UTF-8');
                     $h_ip     = htmlspecialchars($h['ip_address'] ?? '-', ENT_QUOTES, 'UTF-8');
-                    $h_device = htmlspecialchars($h['device_info'] ?? '-', ENT_QUOTES, 'UTF-8'); // เพิ่มตัวแปร device_info
+                    $h_device = htmlspecialchars($h['device_info'] ?? '-', ENT_QUOTES, 'UTF-8');
 
-                    // สร้าง List Item
                     $html .= "
                     <li class='list-group-item px-0 border-bottom-0'>
                         <div class='d-flex align-items-start'>
@@ -161,8 +129,6 @@
     // ---------------------------------------------------------
     // Main Page Logic
     // ---------------------------------------------------------
-    
-    // Helper Function: Badge สถานะ (เหมือนตัวอย่าง)
     function getStatusBadge($status) {
         switch ($status) {
             case 'Received': return '<span class="badge rounded-pill bg-success">สำเร็จ/ได้รับแล้ว</span>';
@@ -173,7 +139,6 @@
         }
     }
 
-    // Query User's History
     $sql = "SELECT l.*, d.title, d.document_code, d.current_status 
             FROM document_status_log l 
             JOIN documents d ON l.document_id = d.document_id 
@@ -183,7 +148,6 @@
             
     $history = CON::selectArrayDB([$_SESSION['user_id']], $sql) ?? [];
 
-    // Generate Rows
     $historyRows = '';
     if (count($history) > 0) {
         foreach ($history as $row) {
@@ -192,13 +156,12 @@
             $title = htmlspecialchars($row['title'] ?? '', ENT_QUOTES, 'UTF-8');
             $status = $row['status'] ?? '-';
             $ip = htmlspecialchars($row['ip_address'] ?? '', ENT_QUOTES, 'UTF-8');
-            $device = htmlspecialchars($row['device_info'] ?? '-', ENT_QUOTES, 'UTF-8'); // เพิ่ม device_info
+            $device = htmlspecialchars($row['device_info'] ?? '-', ENT_QUOTES, 'UTF-8');
             $docId = $row['document_id'];
 
-            // Style Link: ใช้คลาส doc-link สีฟ้าเหมือน Dashboard
-            $codeLink = "<a href='javascript:void(0)' onclick='openDetailModal($docId)' class='doc-link shadow-sm'><i class='fas fa-search me-1'></i>$code</a>";
+            // --- แก้ไขจุดนี้: ลบ onclick ออก และใช้ class/data-id แทน เพื่อเลี่ยง CSP Error ---
+            $codeLink = "<a href='javascript:void(0)' class='doc-link shadow-sm btn-open-detail' data-id='$docId'><i class='fas fa-search me-1'></i>$code</a>";
             
-            // ใช้ Badge สวยๆ
             $statusBadge = getStatusBadge($status);
 
             $historyRows .= "<tr>
@@ -220,7 +183,7 @@
 ?>
 
 <style>
-    /* สไตล์ปุ่มเลขเอกสารเหมือน Dashboard */
+    /* สไตล์ปุ่มเลขเอกสาร */
     .doc-link {
         color: #29B6F6; font-weight: bold; text-decoration: none;
         background: rgba(41, 182, 246, 0.1); padding: 5px 12px; border-radius: 20px; transition: 0.2s; display: inline-block;
@@ -251,7 +214,6 @@
     </div>
 </div>
 
-<!-- Modal รายละเอียดเอกสาร (Dashboard Style) -->
 <div class="modal fade" id="detailModal" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content rounded-4 border-0 shadow-lg">
@@ -261,13 +223,11 @@
             </div>
             <div class="modal-body p-4 bg-light">
                 
-                <!-- Loading State -->
                 <div id="modalLoading" class="text-center py-5">
                     <div class="spinner-border text-primary" role="status"></div>
                     <div class="mt-2 text-muted">กำลังโหลดข้อมูล...</div>
                 </div>
 
-                <!-- Content State -->
                 <div id="modalContent" style="display:none;">
                     <div class="card border-0 shadow-sm rounded-4 mb-4">
                         <div class="card-body">
@@ -291,8 +251,7 @@
 
                     <h6 class="fw-bold text-secondary ps-2 border-start border-4 border-primary mb-3">ประวัติการดำเนินงาน (Timeline)</h6>
                     <div id="d_timeline" class="timeline ms-1">
-                        <!-- Timeline Content will be loaded here -->
-                    </div>
+                        </div>
                 </div>
             </div>
             <div class="modal-footer border-0 bg-light">
@@ -302,7 +261,19 @@
     </div>
 </div>
 
-<script>
+<script nonce="<?php echo $nonce; ?>">
+document.addEventListener('DOMContentLoaded', function() {
+    // ใช้ Event Delegation แทน onclick เพื่อหลีกเลี่ยง CSP Error
+    document.body.addEventListener('click', function(e) {
+        const target = e.target.closest('.btn-open-detail');
+        if (target) {
+            e.preventDefault();
+            const docId = target.getAttribute('data-id');
+            openDetailModal(docId);
+        }
+    });
+});
+
 function openDetailModal(docId) {
     // 1. เปิด Modal
     var myModal = new bootstrap.Modal(document.getElementById('detailModal'));

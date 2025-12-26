@@ -1,8 +1,8 @@
 <?php
-    // ส่วนหัวของหน้าเว็บ (ปรับตามโครงสร้างของคุณ)
+    // ส่วนหัวของหน้าเว็บ
     $page_title   = "จัดการสถานะ";
     $header_class = "header-status";
-    include 'includes/topbar.php'; // ตรวจสอบ path ให้ถูกต้อง
+    include 'includes/topbar.php'; 
 ?>
 
 <div class="page-content container-fluid">
@@ -25,7 +25,7 @@
 
     <div class="row mb-3">
         <div class="col-12 text-end">
-            <button class="btn btn-primary shadow-sm" onclick="openAddCategoryModal()">
+            <button class="btn btn-primary shadow-sm" id="btnAddCategory">
                 <i class="fas fa-plus-circle"></i> เพิ่มหมวดหมู่ใหม่
             </button>
         </div>
@@ -46,12 +46,13 @@
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-4">
-                <input type="hidden" id="cat_id"> <label class="form-label fw-bold">ชื่อหมวดหมู่</label>
+                <input type="hidden" id="cat_id"> 
+                <label class="form-label fw-bold">ชื่อหมวดหมู่</label>
                 <input type="text" id="cat_name" class="form-control form-control-lg" placeholder="เช่น งานฝ่ายบุคคล">
             </div>
             <div class="modal-footer bg-light">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ยกเลิก</button>
-                <button type="button" class="btn btn-primary px-4" onclick="saveCategory()">บันทึก</button>
+                <button type="button" class="btn btn-primary px-4" id="btnSaveCategory">บันทึก</button>
             </div>
         </div>
     </div>
@@ -83,7 +84,7 @@
             </div>
             <div class="modal-footer bg-light">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ยกเลิก</button>
-                <button type="button" class="btn btn-info text-white px-4" onclick="saveStatus()">บันทึก</button>
+                <button type="button" class="btn btn-info text-white px-4" id="btnSaveStatus">บันทึก</button>
             </div>
         </div>
     </div>
@@ -140,12 +141,60 @@
     .status-item:hover .action-btn { opacity: 1; }
 </style>
 
-<script>
-    // URL API ให้ชี้ไปที่ไฟล์ backend ของคุณ
+<script nonce="<?php echo $nonce; ?>">
+    // URL API
     const API_URL = '../api/index.php?dev=manage-workflow';
     let workflowData = [];
 
-    document.addEventListener('DOMContentLoaded', loadWorkflows);
+    // ใช้ Event Listener แทน onclick ใน HTML
+    document.addEventListener('DOMContentLoaded', function() {
+        loadWorkflows();
+
+        // ปุ่ม Static (ปุ่มที่เขียนอยู่ใน HTML ตั้งแต่แรก)
+        document.getElementById('btnAddCategory').addEventListener('click', openAddCategoryModal);
+        document.getElementById('btnSaveCategory').addEventListener('click', saveCategory);
+        document.getElementById('btnSaveStatus').addEventListener('click', saveStatus);
+
+        // ปุ่ม Dynamic (ปุ่มที่สร้างด้วย JS) -> ใช้ Event Delegation
+        document.body.addEventListener('click', function(e) {
+            
+            // 1. ปุ่มแก้ไขสถานะ (js-edit-status)
+            let editStBtn = e.target.closest('.js-edit-status');
+            if (editStBtn) {
+                const d = editStBtn.dataset;
+                openEditStatus(d.catId, d.stId, d.name, d.color);
+                return;
+            }
+
+            // 2. ปุ่มลบสถานะ (js-delete-status)
+            let delStBtn = e.target.closest('.js-delete-status');
+            if (delStBtn) {
+                deleteStatus(delStBtn.dataset.catId, delStBtn.dataset.stId);
+                return;
+            }
+
+            // 3. ปุ่มเพิ่มสถานะ (js-add-status)
+            let addStBtn = e.target.closest('.js-add-status');
+            if (addStBtn) {
+                openAddStatus(addStBtn.dataset.catId);
+                return;
+            }
+
+            // 4. ปุ่มแก้ไขหมวดหมู่ (js-edit-category)
+            let editCatBtn = e.target.closest('.js-edit-category');
+            if (editCatBtn) {
+                openEditCategory(editCatBtn.dataset.id, editCatBtn.dataset.name);
+                return;
+            }
+
+            // 5. ปุ่มลบหมวดหมู่ (js-delete-category)
+            let delCatBtn = e.target.closest('.js-delete-category');
+            if (delCatBtn) {
+                deleteCategory(delCatBtn.dataset.id);
+                return;
+            }
+        });
+    });
 
     function loadWorkflows() {
         fetch(`${API_URL}&action=list`)
@@ -182,9 +231,19 @@
             if (cat.statuses && cat.statuses.length > 0) {
                 statusHtml = cat.statuses.map(st => {
                     const isSystemStatus = st.id.startsWith('st_def_');
-                    // ปุ่มลบ/แก้ไข จะซ่อนถ้าเป็นสถานะของระบบ (ตาม logic Backend)
-                    const editBtn = `<i class="fas fa-pen text-warning action-btn ms-2" title="แก้ไข" onclick="openEditStatus('${cat.id}', '${st.id}', '${st.name}', '${st.color}')"></i>`;
-                    const delBtn = isSystemStatus ? '' : `<i class="fas fa-trash-alt text-danger action-btn ms-2" title="ลบ" onclick="deleteStatus('${cat.id}', '${st.id}')"></i>`;
+                    
+                    // แปลง onclick เป็น data attribute และ class
+                    const editBtn = `<i class="fas fa-pen text-warning action-btn ms-2 js-edit-status" 
+                        title="แก้ไข" 
+                        data-cat-id="${cat.id}" 
+                        data-st-id="${st.id}" 
+                        data-name="${st.name}" 
+                        data-color="${st.color}"></i>`;
+                        
+                    const delBtn = isSystemStatus ? '' : `<i class="fas fa-trash-alt text-danger action-btn ms-2 js-delete-status" 
+                        title="ลบ" 
+                        data-cat-id="${cat.id}" 
+                        data-st-id="${st.id}"></i>`;
                     
                     let badgeHtml = '';
                     if (st.color && st.color.startsWith('#')) {
@@ -209,14 +268,14 @@
                 statusHtml = `<div class="text-center text-muted small py-2">ยังไม่มีสถานะ ลากหรือกดเพิ่มเพื่อสร้าง</div>`;
             }
 
-            // ปุ่มจัดการหมวดหมู่ (ซ่อนปุ่มลบ/แก้ไขชื่อ ถ้าเป็น Default)
+            // ปุ่มจัดการหมวดหมู่ (ใช้ data-attr แทน onclick)
             let catActions = '';
             if (!isDefault) {
                 catActions = `
-                    <button class="btn btn-sm btn-outline-secondary me-1" onclick="openEditCategory('${cat.id}', '${cat.name}')">
+                    <button class="btn btn-sm btn-outline-secondary me-1 js-edit-category" data-id="${cat.id}" data-name="${cat.name}">
                         <i class="fas fa-edit"></i>
                     </button>
-                    <button class="btn btn-sm btn-outline-danger" onclick="deleteCategory('${cat.id}')">
+                    <button class="btn btn-sm btn-outline-danger js-delete-category" data-id="${cat.id}">
                         <i class="fas fa-trash"></i>
                     </button>
                 `;
@@ -238,7 +297,7 @@
                         <div class="card-body pt-0">
                              <div class="d-flex justify-content-between align-items-center mb-2">
                                 <small class="text-muted">รายการสถานะ (${cat.statuses.length})</small>
-                                <button class="btn btn-sm btn-primary rounded-pill px-3" onclick="openAddStatus('${cat.id}')">
+                                <button class="btn btn-sm btn-primary rounded-pill px-3 js-add-status" data-cat-id="${cat.id}">
                                     <i class="fas fa-plus"></i> เพิ่ม
                                 </button>
                             </div>
@@ -250,8 +309,6 @@
                 </div>
             `;
             
-            // สร้างเป็น Row ใหม่ หรือ Append ลง Container
-            // เพื่อความสวยงามเราจะใช้ Grid System
             if(container.innerHTML === '') container.innerHTML = '<div class="row" id="cardRow"></div>';
             document.getElementById('cardRow').innerHTML += card;
         });
@@ -263,7 +320,7 @@
         const lists = document.querySelectorAll('.sortable-list');
         lists.forEach(list => {
             new Sortable(list, {
-                group: 'shared', // ถ้าอยากให้ข้ามหมวดได้ใช้ชื่อเดียวกัน (แต่ backend ต้องรองรับย้ายหมวดด้วย ซึ่งตอนนี้ backend คุณรองรับแค่ sort ในหมวดเดิม แนะนำอย่าเพิ่งให้ข้ามหมวด)
+                group: 'shared', 
                 animation: 150,
                 handle: '.handle',
                 ghostClass: 'sortable-ghost',
@@ -272,8 +329,6 @@
                     const catId = evt.to.getAttribute('data-cat-id');
                     const itemEls = evt.to.querySelectorAll('.status-item');
                     const newOrderIds = Array.from(itemEls).map(el => el.getAttribute('data-id'));
-                    
-                    // เรียก API reorder_status
                     updateStatusOrder(catId, newOrderIds);
                 }
             });
@@ -346,7 +401,7 @@
         document.getElementById('st_catId').value = catId;
         document.getElementById('st_id').value = '';
         document.getElementById('st_name').value = '';
-        document.getElementById('st_color').value = '#6c757d'; // Default color
+        document.getElementById('st_color').value = '#6c757d'; 
         document.getElementById('stModalTitle').innerText = 'เพิ่มสถานะใหม่';
         new bootstrap.Modal(document.getElementById('statusModal')).show();
     }
@@ -356,12 +411,10 @@
         document.getElementById('st_id').value = stId;
         document.getElementById('st_name').value = name;
         
-        // แปลงสีเดิม (Bootstrap class) เป็น Hex ถ้าจำเป็น เพื่อแสดงใน Color Picker
         const colorMap = {
             'secondary': '#6c757d', 'info': '#0dcaf0', 'warning': '#ffc107',
             'primary': '#0d6efd', 'success': '#198754', 'danger': '#dc3545'
         };
-        // ถ้าเป็น hex อยู่แล้วก็ใช้เลย ถ้าเป็น class ให้แปลง
         const hexColor = colorMap[color] || color;
         document.getElementById('st_color').value = hexColor;
 
@@ -402,20 +455,17 @@
         callApi('delete_status', fd, loadWorkflows);
     }
 
-    // 3. Reorder Function (สำคัญ)
     function updateStatusOrder(catId, sortedIdsArray) {
         const fd = new FormData();
         fd.append('category_id', catId);
-        // Backend คุณใช้ชื่อ 'sorted_ids' ในการรับค่า
         fd.append('sorted_ids', JSON.stringify(sortedIdsArray));
 
-        // ส่งข้อมูลไปเงียบๆ ไม่ต้อง reload หน้า
         fetch(`${API_URL}&action=reorder_status`, { method: 'POST', body: fd })
             .then(res => res.json())
             .then(res => {
                 if(!res.success) {
                     alert('บันทึกลำดับไม่สำเร็จ: ' + res.message);
-                    loadWorkflows(); // โหลดข้อมูลเดิมกลับมาถ้าพลาด
+                    loadWorkflows(); 
                 }
             });
     }

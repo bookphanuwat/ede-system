@@ -8,13 +8,18 @@ if (!isset($_SESSION['user_id'])) {
 $current_user = $_SESSION['fullname'] ?? 'Admin System';
 $user_role = $_SESSION['role'] ?? 'Administrator';
 
+// ... (โค้ดส่วนบนคงเดิม)
+
 // กำหนดไอคอนตามหน้า
 $icon_map = [
     'header-dashboard' => 'fas fa-home',
     'header-register'  => 'fas fa-edit',
     'header-tracking'  => 'fas fa-search',
     'header-report'    => 'fas fa-chart-bar',
-    'header-settings'  => 'fas fa-cog'
+    'header-settings'  => 'fas fa-cog',
+    
+    // --- เพิ่มบรรทัดนี้เข้าไปครับ ---
+    'header-scan-history' => 'fas fa-history' 
 ];
 $icon = $icon_map[$header_class] ?? 'fas fa-file';
 ?>
