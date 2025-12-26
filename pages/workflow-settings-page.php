@@ -146,25 +146,19 @@
     const API_URL = '../api/index.php?dev=manage-workflow';
     let workflowData = [];
 
-    // [Security Fix] ฟังก์ชันสำหรับป้องกัน XSS (แปลง HTML Tags เป็นตัวอักษรธรรมดา)
-    function escapeHtml(text) {
-        if (!text) return text;
-        return text
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;")
-            .replace(/"/g, "&quot;")
-            .replace(/'/g, "&#039;");
-    }
-
+    // ใช้ Event Listener แทน onclick ใน HTML
     document.addEventListener('DOMContentLoaded', function() {
         loadWorkflows();
 
+        // ปุ่ม Static (ปุ่มที่เขียนอยู่ใน HTML ตั้งแต่แรก)
         document.getElementById('btnAddCategory').addEventListener('click', openAddCategoryModal);
         document.getElementById('btnSaveCategory').addEventListener('click', saveCategory);
         document.getElementById('btnSaveStatus').addEventListener('click', saveStatus);
 
+        // ปุ่ม Dynamic (ปุ่มที่สร้างด้วย JS) -> ใช้ Event Delegation
         document.body.addEventListener('click', function(e) {
+            
+            // 1. ปุ่มแก้ไขสถานะ (js-edit-status)
             let editStBtn = e.target.closest('.js-edit-status');
             if (editStBtn) {
                 const d = editStBtn.dataset;
@@ -172,24 +166,28 @@
                 return;
             }
 
+            // 2. ปุ่มลบสถานะ (js-delete-status)
             let delStBtn = e.target.closest('.js-delete-status');
             if (delStBtn) {
                 deleteStatus(delStBtn.dataset.catId, delStBtn.dataset.stId);
                 return;
             }
 
+            // 3. ปุ่มเพิ่มสถานะ (js-add-status)
             let addStBtn = e.target.closest('.js-add-status');
             if (addStBtn) {
                 openAddStatus(addStBtn.dataset.catId);
                 return;
             }
 
+            // 4. ปุ่มแก้ไขหมวดหมู่ (js-edit-category)
             let editCatBtn = e.target.closest('.js-edit-category');
             if (editCatBtn) {
                 openEditCategory(editCatBtn.dataset.id, editCatBtn.dataset.name);
                 return;
             }
 
+            // 5. ปุ่มลบหมวดหมู่ (js-delete-category)
             let delCatBtn = e.target.closest('.js-delete-category');
             if (delCatBtn) {
                 deleteCategory(delCatBtn.dataset.id);
@@ -227,43 +225,35 @@
 
         workflowData.forEach(cat => {
             const isDefault = (cat.id === 'cat_default');
-            // [Security Fix] ใช้ escapeHtml กับข้อมูลที่มาจาก API ก่อนแสดงผล
-            const safeCatName = escapeHtml(cat.name);
-            const safeCatId = escapeHtml(cat.id);
-
             let statusHtml = '';
 
+            // Render รายการสถานะ
             if (cat.statuses && cat.statuses.length > 0) {
                 statusHtml = cat.statuses.map(st => {
                     const isSystemStatus = st.id.startsWith('st_def_');
                     
-                    // [Security Fix] escape ข้อมูลสถานะ
-                    const safeStId = escapeHtml(st.id);
-                    const safeStName = escapeHtml(st.name);
-                    const safeStColor = escapeHtml(st.color);
-
+                    // แปลง onclick เป็น data attribute และ class
                     const editBtn = `<i class="fas fa-pen text-warning action-btn ms-2 js-edit-status" 
                         title="แก้ไข" 
-                        data-cat-id="${safeCatId}" 
-                        data-st-id="${safeStId}" 
-                        data-name="${safeStName}" 
-                        data-color="${safeStColor}"></i>`;
+                        data-cat-id="${cat.id}" 
+                        data-st-id="${st.id}" 
+                        data-name="${st.name}" 
+                        data-color="${st.color}"></i>`;
                         
                     const delBtn = isSystemStatus ? '' : `<i class="fas fa-trash-alt text-danger action-btn ms-2 js-delete-status" 
                         title="ลบ" 
-                        data-cat-id="${safeCatId}" 
-                        data-st-id="${safeStId}"></i>`;
+                        data-cat-id="${cat.id}" 
+                        data-st-id="${st.id}"></i>`;
                     
                     let badgeHtml = '';
-                    // สีที่เป็น Hex code ไม่ต้อง escape มากนัก แต่เพื่อความชัวร์ก็ใช้ safeStColor
                     if (st.color && st.color.startsWith('#')) {
-                        badgeHtml = `<span class="badge status-badge rounded-pill me-2" style="background-color: ${safeStColor}; color: #fff;">${safeStName}</span>`;
+                        badgeHtml = `<span class="badge status-badge rounded-pill me-2" style="background-color: ${st.color}; color: #fff;">${st.name}</span>`;
                     } else {
-                        badgeHtml = `<span class="badge bg-${safeStColor} status-badge rounded-pill me-2">${safeStName}</span>`;
+                        badgeHtml = `<span class="badge bg-${st.color} status-badge rounded-pill me-2">${st.name}</span>`;
                     }
 
                     return `
-                    <div class="status-item shadow-sm" data-id="${safeStId}">
+                    <div class="status-item shadow-sm" data-id="${st.id}">
                         <div class="d-flex align-items-center">
                             <div class="handle"><i class="fas fa-grip-vertical"></i></div>
                             ${badgeHtml}
@@ -278,13 +268,14 @@
                 statusHtml = `<div class="text-center text-muted small py-2">ยังไม่มีสถานะ ลากหรือกดเพิ่มเพื่อสร้าง</div>`;
             }
 
+            // ปุ่มจัดการหมวดหมู่ (ใช้ data-attr แทน onclick)
             let catActions = '';
             if (!isDefault) {
                 catActions = `
-                    <button class="btn btn-sm btn-outline-secondary me-1 js-edit-category" data-id="${safeCatId}" data-name="${safeCatName}">
+                    <button class="btn btn-sm btn-outline-secondary me-1 js-edit-category" data-id="${cat.id}" data-name="${cat.name}">
                         <i class="fas fa-edit"></i>
                     </button>
-                    <button class="btn btn-sm btn-outline-danger js-delete-category" data-id="${safeCatId}">
+                    <button class="btn btn-sm btn-outline-danger js-delete-category" data-id="${cat.id}">
                         <i class="fas fa-trash"></i>
                     </button>
                 `;
@@ -296,8 +287,8 @@
                 <div class="col-md-6 col-lg-4 mb-4">
                     <div class="card workflow-card h-100 bg-white">
                         <div class="card-header bg-white d-flex justify-content-between align-items-center py-3 border-bottom-0">
-                            <h5 class="mb-0 fw-bold text-dark text-truncate" title="${safeCatName}">
-                                ${safeCatName}
+                            <h5 class="mb-0 fw-bold text-dark text-truncate" title="${cat.name}">
+                                ${cat.name}
                             </h5>
                             <div class="d-flex align-items-center">
                                 ${catActions}
@@ -306,11 +297,11 @@
                         <div class="card-body pt-0">
                              <div class="d-flex justify-content-between align-items-center mb-2">
                                 <small class="text-muted">รายการสถานะ (${cat.statuses.length})</small>
-                                <button class="btn btn-sm btn-primary rounded-pill px-3 js-add-status" data-cat-id="${safeCatId}">
+                                <button class="btn btn-sm btn-primary rounded-pill px-3 js-add-status" data-cat-id="${cat.id}">
                                     <i class="fas fa-plus"></i> เพิ่ม
                                 </button>
                             </div>
-                            <div class="status-list-container sortable-list" data-cat-id="${safeCatId}">
+                            <div class="status-list-container sortable-list" data-cat-id="${cat.id}">
                                 ${statusHtml}
                             </div>
                         </div>
