@@ -1,86 +1,99 @@
 <?php
+// 1. ตั้งค่า Session และ Security
+ini_set('display_errors', 0);
 ini_set('session.cookie_httponly', 1);
-ini_set('session.cookie_secure', 1);
+ini_set('session.cookie_secure', isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on');
 session_start();
-require_once '../config/db.php';
 
-// ตรวจสอบสิทธิ์ (ถ้ามีระบบ Login แล้ว ควรเปิดบรรทัดนี้)
- if (empty($_SESSION['user_id']) || empty($_SESSION['role']) || $_SESSION['role'] !== 'Administrator') { 
-    // ถ้าไม่ใช่ Admin ให้ดีดออกทันที
+// 2. ตรวจสอบสิทธิ์ (Security Check)
+if (empty($_SESSION['user_id']) || empty($_SESSION['role']) || stripos($_SESSION['role'], 'admin') === false) {
     header("Location: ../login.php");
     exit;
 }
 
-if (isset($_GET['id'])) {
-    $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+// 3. เชื่อมต่อฐานข้อมูล
+// 3.1 เรียก config เพื่อใช้ $pdo (สำหรับ Transaction/Update/Delete)
+require_once '../config/db.php'; 
+
+$configPath = realpath(__DIR__ . '/../../dv-config.php');
+if (file_exists($configPath)) {
+    require_once $configPath;
+    if (defined('DEV_PATH')) {
+        require_once DEV_PATH . '/classes/db.class.v2.php';
+        require_once DEV_PATH . '/functions/global.php';
+    }
+}
+
+// 4. รับค่า ID
+$id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 
 if ($id <= 0) {
-    // จัดการเมื่อ ID ไม่ถูกต้อง เช่น redirect กลับ
-    header("Location: ../settings");
+    header("Location: ../settings/");
     exit;
 }
 
-    try {
-        // 1. ห้ามลบตัวเอง
-        if (isset($_SESSION['user_id']) && $id == $_SESSION['user_id']) {
-            echo "<script>alert('❌ ไม่สามารถลบบัญชีที่กำลังใช้งานอยู่ได้'); window.location.href='../settings.php';</script>";
-            exit;
-        }
+try {
+    // --- ส่วนตรรกะ (Logic Checks) ใช้ CON ---
 
-        // 1.5 ป้องกันการลบ Admin คนสุดท้าย
-        // ตรวจสอบก่อนว่าผู้ใช้ที่จะลบเป็น Admin หรือไม่
-        $stmtRole = $pdo->prepare("SELECT r.role_name FROM users u JOIN roles r ON u.role_id = r.role_id WHERE u.user_id = ?");
-        $stmtRole->execute([$id]);
-        $targetUser = $stmtRole->fetch(PDO::FETCH_ASSOC);
+    // 4.1 ห้ามลบตัวเอง
+    if ($id == $_SESSION['user_id']) {
+        throw new Exception("ไม่สามารถลบบัญชีที่กำลังใช้งานอยู่ได้");
+    }
 
-        if ($targetUser && stripos($targetUser['role_name'], 'admin') !== false) {
-            // ถ้าระบุว่าเป็น Admin ให้เช็คจำนวน Admin ทั้งหมดในระบบ
-            $stmtCount = $pdo->query("SELECT COUNT(*) FROM users u JOIN roles r ON u.role_id = r.role_id WHERE r.role_name LIKE '%Admin%'");
-            $adminCount = $stmtCount->fetchColumn();
+    // 4.2 ป้องกันการลบ Admin คนสุดท้าย
+    // ใช้ CON::selectArrayDB ดึงข้อมูล
+    $sqlRole = "SELECT r.role_name FROM users u LEFT JOIN roles r ON u.role_id = r.role_id WHERE u.user_id = ?";
+    // หมายเหตุ: สังเกตว่า CON ของคุณรับ parameter เป็น (array $params, string $sql)
+    $resultUser = CON::selectArrayDB([$id], $sqlRole); 
+    $targetUser = $resultUser[0] ?? null;
 
-            if ($adminCount <= 1) {
-                echo "<script>alert('❌ ไม่สามารถลบได้ เนื่องจากเป็นผู้ดูแลระบบ (Admin) คนสุดท้ายของระบบ'); window.location.href='../settings.php';</script>";
-                exit;
-            }
-        }
+    if ($targetUser && stripos($targetUser['role_name'], 'admin') !== false) {
+        // ถ้าระบุว่าเป็น Admin ให้เช็คจำนวน Admin ทั้งหมดในระบบ
+        $sqlCount = "SELECT COUNT(*) as c FROM users u LEFT JOIN roles r ON u.role_id = r.role_id WHERE r.role_name LIKE '%Admin%'";
+        $resultCount = CON::selectArrayDB([], $sqlCount);
+        $adminCount = $resultCount[0]['c'] ?? 0;
 
-        // เริ่มต้น Transaction (เพื่อให้ทำงานต่อเนื่องกัน ถ้าพลาดให้ยกเลิกหมด)
-        $pdo->beginTransaction();
-
-        // 2. ปลดชื่อออกจากประวัติการสแกน (document_status_log)
-        // เปลี่ยน action_by ให้เป็น NULL แทนการลบแถวประวัติทิ้ง
-        $stmt = $pdo->prepare("UPDATE document_status_log SET action_by = NULL WHERE action_by = ?");
-        $stmt->execute([$id]);
-
-        // 3. ปลดชื่อออกจากเอกสารที่เคยสร้าง (documents) 
-        // เปิดใช้งานส่วนนี้ เพื่อป้องกัน Error ในตาราง documents ด้วย
-        $stmt = $pdo->prepare("UPDATE documents SET created_by = NULL WHERE created_by = ?");
-        $stmt->execute([$id]);
-
-        // 4. ทำการลบ User
-        $stmt = $pdo->prepare("DELETE FROM users WHERE user_id = ?");
-        $stmt->execute([$id]);
-
-        // ยืนยันการทำงาน
-        $pdo->commit();
-        
-        echo "<script>alert('✅ ลบข้อมูลเรียบร้อยแล้ว'); window.location.href='../settings.php';</script>";
-
-    } catch (PDOException $e) {
-        // ถ้ายกเลิกกลางคัน ให้ย้อนกลับค่าเดิม
-        $pdo->rollBack();
-
-        // เช็ค Error เฉพาะกรณี (เช่น ติด Foreign Key ของตารางอื่นอีก)
-        if ($e->getCode() == '23000') {
-            echo "<script>
-                alert('⚠️ ไม่สามารถลบได้เนื่องจากติดข้อกำหนดของฐานข้อมูล\\n(กรุณาตั้งค่า Database ให้ action_by/created_by รองรับค่า NULL ก่อน)'); 
-                window.location.href='../settings.php';
-            </script>";
-        } else {
-            echo "Error: " . $e->getMessage();
+        if ($adminCount <= 1) {
+            throw new Exception("ไม่สามารถลบได้ เนื่องจากเป็นผู้ดูแลระบบ (Admin) คนสุดท้ายของระบบ");
         }
     }
-} else {
-    header("Location: ../settings.php");
+
+    // --- ส่วนเปลี่ยนแปลงข้อมูล (Write Operations) ใช้ $pdo เพื่อ Transaction ---
+    $pdo->beginTransaction();
+
+    // 5. ปลดชื่อออกจากประวัติ (Set NULL)
+    // 5.1 ตาราง document_status_log
+    $stmt = $pdo->prepare("UPDATE document_status_log SET action_by = NULL WHERE action_by = ?");
+    $stmt->execute([$id]);
+
+    // 5.2 ตาราง documents
+    $stmt = $pdo->prepare("UPDATE documents SET created_by = NULL WHERE created_by = ?");
+    $stmt->execute([$id]);
+
+    // 6. ลบ User
+    $stmt = $pdo->prepare("DELETE FROM users WHERE user_id = ?");
+    $stmt->execute([$id]);
+
+    // ยืนยันการทำงาน
+    $pdo->commit();
+    
+    header("Location: ../settings/?msg=" . urlencode('ลบผู้ใช้งานเรียบร้อยแล้ว'));
+    exit;
+
+} catch (Exception $e) {
+    // ถ้ายกเลิกกลางคัน ให้ย้อนกลับค่าเดิม
+    if ($pdo->inTransaction()) {
+        $pdo->rollBack();
+    }
+
+    $errorMsg = $e->getMessage();
+    
+    // เช็ค Error SQL กรณีติด Constraint
+    if ($e instanceof PDOException && $e->getCode() == '23000') {
+        $errorMsg = 'ไม่สามารถลบได้ เนื่องจากข้อมูลนี้ถูกใช้งานอยู่ในระบบ (Foreign Key Constraint)';
+    }
+
+    header("Location: ../settings/?error=" . urlencode($errorMsg));
+    exit;
 }
 ?>

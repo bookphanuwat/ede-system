@@ -1,16 +1,19 @@
 <div class="sidebar d-flex flex-column">
     <div class="text-center mb-4 pt-2">
-        <h4 class="fw-bold text-secondary">
+        <h4 class="fw-bold text-secondary mb-0" style="letter-spacing: 1px;">
             <i class="fas fa-file-signature text-info me-2"></i>EDE System
         </h4>
+        
+        <div class="text-muted text-uppercase mt-1" 
+             style="font-size: 0.65rem; letter-spacing: 2px; font-weight: 600; opacity: 0.8;">
+            Electronic Document Exchange
+        </div>
     </div>
 
-    <!-- ลิงก์หน้าหลัก (รวมเมนู) -->
     <a href="<?php echo SITE_URL; ?>" class="nav-btn bg-secondary text-white mb-3">
         <i class="fas fa-th-large"></i> เมนูหลัก
     </a>
 
-    <!-- ลิงก์ Dashboard (แยกออกมาแล้ว) -->
     <a href="<?php echo SITE_URL; ?>/dashboard/" class="nav-btn btn-dashboard">
         <i class="fas fa-chart-pie"></i> แดชบอร์ด
     </a>

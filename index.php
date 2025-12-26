@@ -5,8 +5,7 @@
     // 2. ตั้งค่า Security Header ผ่าน PHP (ใช้ Nonce แทน unsafe-inline)
     // สังเกต: เราลบ 'unsafe-inline' และ 'unsafe-eval' ออกแล้ว
     // สังเกต: เราลบ https://cdn.jsdelivr.net ออก แล้วใช้ 'self' สำหรับไฟล์ Local
-    header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$nonce}' https://static.line-scdn.net; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com; img-src 'self' data: https://api.qrserver.com https://*.line-scdn.net; connect-src 'self' https://*.line.me https://*.line-scdn.net; frame-ancestors 'self'; base-uri 'self'; form-action 'self'; object-src 'none';");
-    
+header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$nonce}' https://static.line-scdn.net; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com; img-src 'self' data: https://api.qrserver.com https://*.line-scdn.net; connect-src 'self' https://*.line.me https://*.line-scdn.net; frame-ancestors 'self'; base-uri 'self'; form-action 'self'; object-src 'none';");    
     // Header ความปลอดภัยอื่นๆ
     header("X-Frame-Options: SAMEORIGIN");
     header("X-Content-Type-Options: nosniff");
@@ -155,29 +154,17 @@
     <script src="<?php echo ASSET_PATH; ?>/bootstrap/dist/js/bootstrap.bundle.min.js" nonce="<?php echo $nonce; ?>"></script>
     <script src="<?php echo ASSET_PATH; ?>/sweetalert2/dist/sweetalert2.min.js" nonce="<?php echo $nonce; ?>"></script>
     
-    <script src="js/qrcode.min.js" nonce="<?php echo $nonce; ?>"></script>
-
+    <script src="<?php echo SITE_URL; ?>/js/qrcode.min.js" nonce="<?php echo $nonce; ?>"></script>
     <script src="https://static.line-scdn.net/liff/edge/versions/2.22.3/sdk.js" nonce="<?php echo $nonce; ?>"></script>
+    <script src="<?php echo SITE_URL; ?>/js/Sortable.min.js" nonce="<?php echo $nonce; ?>"></script>
 
-    <script src="js/Sortable.min.js" nonce="<?php echo $nonce; ?>"></script>
-
-    <script src="<?php echo SITE_URL; ?>/js/global.min.js?v=<?php echo filemtime( 'js/global.min.js' ); ?>" nonce="<?php echo $nonce; ?>"></script>
+   <script src="<?php echo SITE_URL; ?>/js/global.min.js?v=<?php echo filemtime( 'js/global.min.js' ); ?>" nonce="<?php echo $nonce; ?>"></script>
 
     <script async nonce="<?php echo $nonce; ?>">
         'use strict';
         <?php echo( isset( $jsExt ) ) ? $jsExt : ''; ?>
         <?php ( isset( $jsReq ) ) ? require $jsReq : ''; ?>
     </script>
-
-</body>
-</html>
-
-
-    <script async>
-    'use strict';
-    <?php echo( isset( $jsExt ) ) ? $jsExt : ''; ?>
-    <?php ( isset( $jsReq ) ) ? require $jsReq : ''; ?>
-  </script>
 
 </body>
 </html>

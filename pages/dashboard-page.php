@@ -112,9 +112,10 @@
             $view_count   = number_format( $doc['view_count'] ?? 0 );
             $status_badge = getStatusBadge( $doc['current_status'] ?? '', $workflow_colors );
 
+            // [แก้ไข] เอา onclick ออก ใส่ class และ data-attribute แทน
             $docsRows .= "<tr>
                 <td>
-                    <a href=\"javascript:void(0)\" onclick=\"openDetailModal('$doc_code')\" class=\"doc-link shadow-sm\">
+                    <a href=\"#\" data-code=\"$doc_code\" class=\"doc-link shadow-sm js-open-detail\">
                         <i class=\"fas fa-qrcode me-1\"></i> $doc_code
                     </a>
                 </td>
@@ -130,7 +131,7 @@
                     </div>
                 </td>
                 <td>
-                    <button onclick=\"showQRModal('$doc_code', '$title')\" class=\"btn btn-sm btn-light border rounded-pill shadow-sm text-dark\"><i class=\"fas fa-qrcode text-success\"></i> QR</button>
+                    <button type=\"button\" data-code=\"$doc_code\" data-title=\"$title\" class=\"btn btn-sm btn-light border rounded-pill shadow-sm text-dark js-show-qr\"><i class=\"fas fa-qrcode text-success\"></i> QR</button>
                     <a target=\"_blank\" href=\"../print/$doc_code\" class=\"btn btn-sm btn-light border rounded-circle shadow-sm ms-1\"><i class=\"fas fa-print\"></i></a>
                 </td>
             </tr>";
@@ -151,7 +152,6 @@
 </style>
 
 <div class="page-content">
-    <!-- Load Time Display with Details -->
     <div class="alert alert-info rounded-4 mb-4 shadow-sm" style="font-size: 0.85rem;">
         <i class="fas fa-tachometer-alt me-2"></i>
         <strong>เวลาโหลดหน้า:</strong>
@@ -161,7 +161,6 @@
         </button>
     </div>
 
-    <!-- Server Timing Details -->
     <div class="collapse mb-4" id="timeDetails">
         <div class="card card-body rounded-4 border-0 shadow-sm" style="background: #f8f9fa; font-size: 0.8rem;">
             <strong class="d-block mb-2">⏱️ รายละเอียดเวลาประมวลผล (Server):</strong>
@@ -173,8 +172,7 @@
         </div>
     </div>
 
-    <!-- Cards สรุปยอด -->
-    <h5 class="mb-4 fw-bold text-secondary">**สรุปสถานะประจำวัน**                                                                                                    <?php echo $is_admin ? '(ทั้งหมด)' : '(เฉพาะของคุณ)'; ?></h5>
+    <h5 class="mb-4 fw-bold text-secondary">**สรุปสถานะประจำวัน** <?php echo $is_admin ? '(ทั้งหมด)' : '(เฉพาะของคุณ)'; ?></h5>
     <div class="row mb-5 g-4">
         <div class="col-md-3"><div class="p-4 rounded-5 text-center text-white shadow-sm position-relative overflow-hidden" style="background: linear-gradient(135deg, #4FC3F7, #29B6F6);"><i class="fas fa-folder-open fa-4x position-absolute" style="opacity:0.2; right:-10px; bottom:-10px;"></i><h2 class="fw-bold mb-0"><?php echo number_format( $stats['total'] ); ?></h2><small>เอกสารทั้งหมด</small></div></div>
         <div class="col-md-3"><div class="p-4 rounded-5 text-center text-white shadow-sm" style="background: linear-gradient(135deg, #81C784, #66BB6A);"><i class="fas fa-check-circle fa-4x position-absolute" style="opacity:0.2; right:-10px; bottom:-10px;"></i><h2 class="fw-bold mb-0"><?php echo number_format( $stats['success'] ); ?></h2><small>สำเร็จ</small></div></div>
@@ -182,7 +180,6 @@
         <div class="col-md-3"><div class="p-4 rounded-5 text-center text-white shadow-sm" style="background: linear-gradient(135deg, #E57373, #EF5350);"><i class="fas fa-exclamation-triangle fa-4x position-absolute" style="opacity:0.2; right:-10px; bottom:-10px;"></i><h2 class="fw-bold mb-0"><?php echo number_format( $stats['late'] ); ?></h2><small>ล่าช้า</small></div></div>
     </div>
 
-    <!-- ตารางรายการล่าสุด -->
     <h5 class="mb-3 fw-bold text-secondary">**รายการเอกสารล่าสุด**</h5>
     <div class="table-responsive rounded-4 shadow-sm border">
         <table class="table table-hover mb-0 align-middle text-center">
@@ -202,7 +199,6 @@
     </div>
 </div>
 
-<!-- 1. Modal QR Code -->
 <div class="modal fade" id="qrModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content rounded-4 border-0 shadow">
@@ -224,7 +220,6 @@
     </div>
 </div>
 
-<!-- 2. Modal รายละเอียดเอกสาร -->
 <div class="modal fade" id="detailModal" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content rounded-4 border-0 shadow-lg">

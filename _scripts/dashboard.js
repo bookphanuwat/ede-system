@@ -3,10 +3,7 @@
 // คำนวณและแสดงเวลาโหลด (รวม Server + Client)
 window.addEventListener('load', function() {
     const navTiming = performance.getEntriesByType('navigation')[0];
-
-    // ดึงค่า serverTimeMs จาก global variable ที่ถูกกำหนดใน PHP
     const serverTimeMs = (typeof SERVER_TIME_MS !== 'undefined') ? SERVER_TIME_MS : 0;
-
     const clientRenderTime = navTiming ? navTiming.domInteractive - navTiming.fetchStart : 0;
     const totalLoadTime = (performance.now() / 1000).toFixed(3);
 
@@ -16,8 +13,8 @@ window.addEventListener('load', function() {
     }
 });
 
-// ฟังก์ชันแสดง QR Code Modal
-function showQRModal(docCode, docTitle) {
+// [แก้ไข 1] รับค่า triggerBtn เพิ่มเข้ามา
+function showQRModal(docCode, docTitle, triggerBtn) {
     document.getElementById('modalDocCode').innerText = "รหัส: " + docCode;
     document.getElementById('modalDocTitle').innerText = docTitle;
     document.getElementById('btnPrintLink').href = '../print/' + docCode;
@@ -26,7 +23,7 @@ function showQRModal(docCode, docTitle) {
     const qrContainer = document.getElementById("qrcode");
     qrContainer.innerHTML = "";
 
-    // สร้าง QR Code (ต้องแน่ใจว่ามี QRCode library)
+    // สร้าง QR Code
     if (typeof QRCode !== 'undefined') {
         new QRCode(qrContainer, {
             text: docCode,
@@ -35,21 +32,28 @@ function showQRModal(docCode, docTitle) {
         });
     }
 
-    // แสดง Modal
-    const qrModal = new bootstrap.Modal(document.getElementById('qrModal'));
-    qrModal.show();
+    // [แก้ไข 2] ใช้ getOrCreateInstance และส่ง triggerBtn ไปที่ .show()
+    // เพื่อให้ Bootstrap รู้ว่าจะคืน Focus ไปที่ปุ่มไหนตอนปิด
+    const modalEl = document.getElementById('qrModal');
+    const qrModal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    qrModal.show(triggerBtn); 
 }
 
-// ฟังก์ชันแสดงรายละเอียดเอกสาร
-async function openDetailModal(code) {
-    const detailModal = new bootstrap.Modal(document.getElementById('detailModal'));
-    detailModal.show();
+// ... (ส่วนบนของไฟล์ ฟังก์ชัน showQRModal คงเดิม) ...
+
+// [แก้ไข 1] เพิ่ม triggerBtn ในพารามิเตอร์
+async function openDetailModal(code, triggerBtn) {
+    // ใช้ getOrCreateInstance แทน new Modal เพื่อป้องกันการสร้างซ้ำ
+    const modalEl = document.getElementById('detailModal');
+    const detailModal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    
+    // ส่ง triggerBtn ไปที่ .show() เพื่อจัดการ Focus ตอนปิด
+    detailModal.show(triggerBtn);
 
     document.getElementById('modalLoading').style.display = 'block';
     document.getElementById('modalContent').style.display = 'none';
 
     try {
-        // เรียก API เพื่อดึงข้อมูลเอกสาร
         const res = await fetch(`${site_url}/api/getdocinfo/${code}/`);
         const data = await res.json();
 
@@ -111,3 +115,40 @@ async function openDetailModal(code) {
         alert("ไม่สามารถโหลดข้อมูลได้: " + err.message);
     }
 }
+
+// [แก้ไข 2] อัปเดต Event Listener ด้านล่าง
+document.addEventListener('DOMContentLoaded', function() {
+    
+    // 1. ดักจับคลิกปุ่มเปิด QR Code (โค้ดเดิมที่แก้ไปแล้ว)
+    document.body.addEventListener('click', function(e) {
+        const btn = e.target.closest('.js-show-qr');
+        if (btn) {
+            e.preventDefault();
+            const docCode = btn.getAttribute('data-code');
+            const docTitle = btn.getAttribute('data-title');
+            showQRModal(docCode, docTitle, btn); // ส่ง btn ไปด้วย
+        }
+    });
+
+    // 2. ดักจับคลิกดูรายละเอียดเอกสาร
+    document.body.addEventListener('click', function(e) {
+        const link = e.target.closest('.js-open-detail');
+        if (link) {
+            e.preventDefault();
+            const docCode = link.getAttribute('data-code');
+            
+            // [จุดสำคัญ] ส่ง link (ตัวแปรที่เก็บ Element <a>) ไปเป็น Argument ที่ 2
+            openDetailModal(docCode, link); 
+        }
+    });
+
+    // Code แถมสำหรับปิด Focus
+    const modals = document.querySelectorAll('.modal');
+    modals.forEach(modal => {
+        modal.addEventListener('hide.bs.modal', function() {
+            if (document.activeElement && modal.contains(document.activeElement)) {
+                document.activeElement.blur();
+            }
+        });
+    });
+});

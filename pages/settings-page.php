@@ -5,6 +5,7 @@
 
     // ดึงข้อมูลผู้ใช้งาน
     $users = [];
+    // หมายเหตุ: เรียกใช้ Class CON ตามปกติ
     $sql = "SELECT u.*, r.role_name FROM users u LEFT JOIN roles r ON u.role_id = r.role_id ORDER BY u.user_id ASC";
     $users = CON::selectArrayDB( [], $sql ) ?? [];
 
@@ -20,13 +21,15 @@
             $roleName = htmlspecialchars($roleNameRaw, ENT_QUOTES, 'UTF-8');
             $userId = $user['user_id'] ?? 0;
             
-            // Escape for JS context in onclick
-            $username_js = htmlspecialchars(addslashes($raw_username), ENT_QUOTES, 'UTF-8');
-
             $badgeColor = 'bg-secondary';
             if ( stripos( $roleNameRaw, 'admin' ) !== false ) $badgeColor = 'bg-primary';
             if ( stripos( $roleNameRaw, 'staff' ) !== false ) $badgeColor = 'bg-info text-dark';
 
+            // [แก้ไข 1] 
+            // - เปลี่ยน href จาก 'javascript:void(0);' เป็น '#' 
+            // - ลบ onclick ออก 
+            // - ใส่ class 'js-delete-user' เพื่อใช้ดักจับ Event แทน
+            // - ใส่ data-id และ data-username เพื่อส่งค่าไปที่ JS
             $userRows .= "<tr>
                 <td class='ps-4'>
                     <div class='fw-bold'>$fullname</div>
@@ -36,14 +39,13 @@
                 <td class='text-center'><span class='badge rounded-pill $badgeColor px-3 py-2'>$roleName</span></td>
                 <td class='text-center'>
                     <a href='../settings_form.php?id=$userId' class='btn btn-sm btn-light rounded-pill border me-1 text-primary' title='แก้ไข'><i class='fas fa-edit'></i></a>
-                    <a href='javascript:void(0);' onclick=\"confirmDelete($userId, '$username_js')\" class='btn btn-sm btn-light rounded-pill border text-danger' title='ลบ'><i class='fas fa-trash-alt'></i></a>
+                    <a href='#' class='btn btn-sm btn-light rounded-pill border text-danger js-delete-user' data-id='$userId' data-username='$username' title='ลบ'><i class='fas fa-trash-alt'></i></a>
                 </td>
             </tr>";
         }
     } else {
         $userRows = '<tr><td colspan="4" class="text-center py-5 text-muted"><i class="fas fa-users-slash fa-3x mb-3 opacity-50"></i><br>ยังไม่มีข้อมูลผู้ใช้งานในระบบ</td></tr>';
     }
-
 ?>
 
 <div class="page-content">
@@ -79,10 +81,23 @@
     </nav>
 </div>
 
-<script>
-function confirmDelete(userId, username) {
-    if (confirm("คุณต้องการลบผู้ใช้ '" + username + "' ใช่หรือไม่?\nการกระทำนี้ไม่สามารถเรียกคืนได้")) {
-        window.location.href = '../api/delete_user.php?id=' + userId;
-    }
-}
+<script nonce="<?php echo $nonce; ?>">
+document.addEventListener('DOMContentLoaded', function() {
+    // ดักจับการคลิกปุ่มที่มี class 'js-delete-user' ทั้งหมด
+    const deleteButtons = document.querySelectorAll('.js-delete-user');
+    
+    deleteButtons.forEach(function(button) {
+        button.addEventListener('click', function(event) {
+            event.preventDefault(); // ป้องกันไม่ให้ href="#" ทำงาน (ไม่ให้หน้าเด้ง)
+                
+            // ดึงค่าจาก data-attribute ที่เราใส่ไว้
+            const userId = this.getAttribute('data-id');
+            const username = this.getAttribute('data-username');
+            
+            if (confirm("คุณต้องการลบผู้ใช้ '" + username + "' ใช่หรือไม่?\nการกระทำนี้ไม่สามารถเรียกคืนได้")) {
+                window.location.href = '../api/delete_user.php?id=' + userId;
+            }
+        });
+    });
+});
 </script>
