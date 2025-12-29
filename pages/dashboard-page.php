@@ -2,6 +2,7 @@
     $page_title   = "Dashboard (ภาพรวม)";
     $header_class = "header-dashboard";
     include 'includes/topbar.php';
+ 
 
     // เริ่มจับเวลา
     $start_time = microtime( true );

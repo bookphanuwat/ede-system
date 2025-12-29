@@ -1,4 +1,9 @@
 <?php
+session_start();
+if (!isset($_SESSION['user_id'])) {
+    header("Location: ../login.php");
+    exit;
+}
 // ตั้งค่าสำหรับ topbar
 $page_title = "เมนูหลัก (Main Menu)";
 $header_class = "header-menu";
