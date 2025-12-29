@@ -7,11 +7,9 @@ require_once '../config/db.php';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // CSRF Protection: ตรวจสอบ Token
     if (!isset($_POST['csrf_token']) || empty($_SESSION['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
-        echo "<script>
-            alert('❌ Security Check Failed (CSRF Token mismatch)'); 
-            window.location.href='../login.php';
-        </script>";
+       //echo "<script>alert('❌ Security Check Failed (CSRF Token mismatch)'); window.history.back();</script>";
         exit;
+
     }
 
     $username = trim($_POST['username']);

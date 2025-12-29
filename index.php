@@ -20,8 +20,8 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
 
 
     
-    ini_set('display_errors', 0); 
-    ini_set('display_startup_errors', 0);
+    ini_set('display_errors', 1); 
+    ini_set('display_startup_errors', 1);
     error_reporting(E_ALL); 
 
     // ------------------------------------------------------------------------
@@ -148,7 +148,7 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
     </div><!-- .d-flex -->
 
     <!-- Core JavaScript -->
-    <<script nonce="<?php echo $nonce; ?>">
+    <script nonce="<?php echo $nonce; ?>">
         const site_url = '<?php echo SITE_URL; ?>';
     </script>
 
