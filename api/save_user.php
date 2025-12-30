@@ -68,7 +68,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt->execute([$fullname, $department, $role_id, $user_id]);
             }
             
-            echo "<script>alert('✅ แก้ไขข้อมูลเรียบร้อย'); window.location.href='../settings/';</script>";
+            header("Location: ../settings/?status=success&msg=" . urlencode('แก้ไขข้อมูลเรียบร้อย'));
+            exit;
 
         } else {
             // --- กรณีเพิ่มใหม่ (Insert) ---
@@ -95,7 +96,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt = $pdo->prepare("INSERT INTO users (username, password_hash, fullname, department, role_id) VALUES (?, ?, ?, ?, ?)");
             $stmt->execute([$username, $password_hash, $fullname, $department, $role_id]);
 
-            echo "<script>alert('✅ เพิ่มผู้ใช้งานเรียบร้อย'); window.location.href='../settings/';</script>";
+            header("Location: ../settings/?status=success&msg=" . urlencode('เพิ่มผู้ใช้งานเรียบร้อย'));
+            exit;
         }
 
     } catch (PDOException $e) {

@@ -4,6 +4,41 @@
     include 'includes/topbar.php';
 
     // ดึงข้อมูลผู้ใช้งาน
+    // ตรวจสอบ Alert จากการ Redirect (PHP Only - ไม่ใช้ JS)
+    $alert_html = '';
+    if (isset($_GET['status'])) {
+        $status = $_GET['status'];
+        $msg = htmlspecialchars($_GET['msg'] ?? '', ENT_QUOTES, 'UTF-8');
+        
+        if ($status === 'success') {
+            $alert_html = "<div class='alert alert-success alert-dismissible fade show shadow-sm border-0 border-start border-5 border-success bg-white rounded-4 mb-4' role='alert'>
+                                <div class='d-flex align-items-center'>
+                                    <div class='me-3 text-success'>
+                                        <i class='fas fa-check-circle fa-2x'></i>
+                                    </div>
+                                    <div>
+                                        <h6 class='fw-bold mb-0 text-success'>ดำเนินการสำเร็จ</h6>
+                                        <div class='text-muted small'>$msg</div>
+                                    </div>
+                                </div>
+                                <button type='button' class='btn-close' data-bs-dismiss='alert' aria-label='Close'></button>
+                           </div>";
+        } else if ($status === 'error') {
+            $alert_html = "<div class='alert alert-danger alert-dismissible fade show shadow-sm border-0 border-start border-5 border-danger bg-white rounded-4 mb-4' role='alert'>
+                                <div class='d-flex align-items-center'>
+                                    <div class='me-3 text-danger'>
+                                        <i class='fas fa-exclamation-circle fa-2x'></i>
+                                    </div>
+                                    <div>
+                                        <h6 class='fw-bold mb-0 text-danger'>เกิดข้อผิดพลาด</h6>
+                                        <div class='text-muted small'>$msg</div>
+                                    </div>
+                                </div>
+                                <button type='button' class='btn-close' data-bs-dismiss='alert' aria-label='Close'></button>
+                           </div>";
+        }
+    }
+
     $users = [];
     // หมายเหตุ: เรียกใช้ Class CON ตามปกติ
     $sql = "SELECT u.*, r.role_name FROM users u LEFT JOIN roles r ON u.role_id = r.role_id ORDER BY u.user_id ASC";
@@ -49,6 +84,7 @@
 ?>
 
 <div class="page-content">
+    <?php echo $alert_html; ?>
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h5 class="fw-bold text-secondary mb-0">**⚙️ จัดการผู้ใช้งาน**</h5>
         <a href="../settings_form.php" class="btn btn-success rounded-pill px-4 shadow-sm" style="background-color: #00E676; border:none; color:black; font-weight: bold;">

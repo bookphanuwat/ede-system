@@ -77,7 +77,7 @@ try {
     // ยืนยันการทำงาน
     $pdo->commit();
     
-    header("Location: ../settings/?msg=" . urlencode('ลบผู้ใช้งานเรียบร้อยแล้ว'));
+    header("Location: ../settings/?status=success&msg=" . urlencode('ลบผู้ใช้งานเรียบร้อยแล้ว'));
     exit;
 
 } catch (Exception $e) {
@@ -93,7 +93,7 @@ try {
         $errorMsg = 'ไม่สามารถลบได้ เนื่องจากข้อมูลนี้ถูกใช้งานอยู่ในระบบ (Foreign Key Constraint)';
     }
 
-    header("Location: ../settings/?error=" . urlencode($errorMsg));
+    header("Location: ../settings/?status=error&msg=" . urlencode($errorMsg));
     exit;
 }
 ?>
