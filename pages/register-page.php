@@ -178,15 +178,29 @@
 </div>
 
 <script nonce="<?php echo $nonce; ?>">
-    // ใช้ var เพื่อความปลอดภัย กรณีมีการโหลด script นี้ซ้ำ
-    var API_URL = '../api/index.php?dev=manage-workflow';
-    var CURRENT_USER_ID = "<?php echo $_SESSION['user_id'] ?? ''; ?>";
-    var allWorkflows = [];
+    // --- ส่วน Config: ส่งค่าจาก PHP ไปให้ JavaScript ---
+    // ใช้ window. เพื่อป้องกัน Error "Already declared" กรณีมีไฟล์อื่นประกาศไว้แล้ว
+    window.CURRENT_USER_ID = "<?php echo $_SESSION['user_id'] ?? ''; ?>";
+    
+    // หมายเหตุ: ถ้าใช้ register.js แยกแล้ว ควรลบ Logic ด้านล่างนี้ออกเพื่อให้เรียกผ่านไฟล์ JS อย่างเดียว
+    // แต่ถ้ายังไม่ได้ include ไฟล์ js แยก ให้คงโค้ดด้านล่างไว้ แต่เปลี่ยน var เป็น window. หรือชื่ออื่น
+    
+    // กำหนด API URL ให้ถูกต้องสำหรับหน้านี้ (../api/...)
+    window.PAGE_API_URL = '../api/index.php?dev=manage-workflow'; 
+
+    /* [ข้อแนะนำ] 
+       หากคุณโหลด js/register.min.js หรือ _scripts/register.js เข้ามาในหน้านี้แล้ว
+       โค้ดด้านล่างนี้จะซ้ำซ้อนและอาจทำงานตีกัน แนะนำให้ลบ หรือ Comment ออกครับ
+       และให้แน่ใจว่าในไฟล์ js แยก ได้แก้ให้ใช้ค่าจาก window.PAGE_API_URL หรือ window.CURRENT_USER_ID
+    */
+
+    // --- เริ่มต้น Logic ในหน้าเพจ (ถ้าจำเป็นต้องใช้ Inline Script) ---
+    var allWorkflows = []; // ใช้ var หรือ let ตามปกติ (ถ้ายังไม่ประกาศในไฟล์อื่น)
 
     document.addEventListener( 'DOMContentLoaded', function() {
-        loadWorkflows();
+        // ใช้ URL ที่ถูกต้องจากหน้านี้
+        loadWorkflowsInline(window.PAGE_API_URL);
 
-        // ตรวจสอบว่า element มีอยู่จริงก่อน addEventListener
         const wfSelect = document.getElementById( 'workflowSelect' );
         if(wfSelect) {
             wfSelect.addEventListener( 'change', function() {
@@ -238,13 +252,15 @@
         if(statusInput) statusInput.value = "";
     }
 
-    function loadWorkflows() {
+    // เปลี่ยนชื่อฟังก์ชันเพื่อไม่ให้ชนกับในไฟล์ JS อื่น (ถ้ามี)
+    function loadWorkflowsInline(apiUrl) {
         const select = document.getElementById( 'workflowSelect' );
-        if(!select) return; // ป้องกัน error หากไม่เจอ element
+        if(!select) return;
 
         select.innerHTML = '<option value="" disabled selected>กำลังโหลดข้อมูล...</option>';
 
-        fetch( `${API_URL}&action=list&user_id=${CURRENT_USER_ID}` )
+        // ใช้ CURRENT_USER_ID ที่ประกาศแบบ window
+        fetch( `${apiUrl}&action=list&user_id=${window.CURRENT_USER_ID}` )
             .then( res => res.json() )
             .then( res => {
                 select.innerHTML = '<option value="" selected disabled>-- กรุณาเลือกหมวดหมู่สถานะ --</option>';
