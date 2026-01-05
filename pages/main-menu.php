@@ -86,7 +86,7 @@ $header_class = "header-menu";
                     <div class="col-md-6 col-lg-4">
                         <a href="<?php echo SITE_URL; ?>/scan-history/" class="text-decoration-none">
                             <div class="card menu-card shadow-sm rounded-4 p-4 text-center">
-                                <div class="menu-icon-box shadow-sm" style="background: #546E7A;">
+                                <div class="menu-icon-box shadow-sm" style="background: #19422b;">
                                     <i class="fas fa-history"></i>
                                 </div>
                                 <h4 class="fw-bold text-dark">ประวัติการสแกน</h4>

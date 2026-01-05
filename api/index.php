@@ -603,6 +603,115 @@ switch ( $GET_DEV ) {
             $json_data['message'] = 'Error: ' . $e->getMessage();
         }
         break;
+   // --- ส่วนที่เพิ่มใหม่สำหรับรายงาน ---
+    case 'report':
+        // รับค่าช่วงเวลา
+        $start_date = sanitizeGetParam('start_date', 'string', date('Y-m-01'));
+        $end_date   = sanitizeGetParam('end_date', 'string', date('Y-m-t'));
+        
+        // ตรวจสอบสิทธิ์
+        $is_admin  = ( stripos( $_SESSION['role'] ?? '', 'admin' ) !== false );
+        $user_dept = $_SESSION['department'] ?? '';
+
+        // 1. ดึงรายชื่อแผนก
+        $dept_params = [];
+        $sql_dept = "SELECT DISTINCT department FROM users WHERE department IS NOT NULL AND department != ''";
+        if ( !$is_admin && !empty( $user_dept ) ) {
+            $sql_dept .= " AND department = ?";
+            $dept_params[] = $user_dept;
+        }
+        $departments = CON::selectArrayDB( $dept_params, $sql_dept ) ?? [];
+
+        $report_data = [];
+        $grand_total_sent = 0;
+        $grand_total_recv = 0;
+
+        foreach ( $departments as $row ) {
+            $dept = $row['department'];
+
+            // A. นับยอดส่งออก (Sent)
+            $sql_sent = "SELECT COUNT(*) as count 
+                         FROM documents d 
+                         JOIN users u ON d.created_by = u.user_id 
+                         WHERE u.department = ? 
+                         AND DATE(d.created_at) BETWEEN ? AND ?";
+            $res_sent = CON::selectArrayDB( [$dept, $start_date, $end_date], $sql_sent );
+            $sent_count = (int)($res_sent[0]['count'] ?? 0);
+
+            // B. นับยอดรับเข้า (Received)
+            $sql_recv = "SELECT COUNT(*) as count 
+                         FROM documents d 
+                         JOIN users u ON d.receiver_name = u.fullname 
+                         WHERE u.department = ? 
+                         AND DATE(d.created_at) BETWEEN ? AND ?";
+            $res_recv = CON::selectArrayDB( [$dept, $start_date, $end_date], $sql_recv );
+            $recv_count = (int)($res_recv[0]['count'] ?? 0);
+
+            $report_data[] = [
+                'department' => $dept,
+                'sent'       => $sent_count,
+                'received'   => $recv_count,
+                'total'      => $sent_count + $recv_count
+            ];
+
+            $grand_total_sent += $sent_count;
+            $grand_total_recv += $recv_count;
+        }
+
+        $json_data['status'] = 'success';
+        $json_data['data']   = $report_data;
+        $json_data['summary'] = [
+            'sent'     => $grand_total_sent,
+            'received' => $grand_total_recv,
+            'total'    => $grand_total_sent + $grand_total_recv
+        ];
+        break;
+
+    case 'report_detail':
+        $dept       = sanitizeGetParam('department', 'string', '');
+        $type       = sanitizeGetParam('type', 'string', ''); // 'sent' หรือ 'received'
+        $start_date = sanitizeGetParam('start_date', 'string', '');
+        $end_date   = sanitizeGetParam('end_date', 'string', '');
+
+        if (empty($dept) || empty($type)) {
+            $json_data['status'] = 'error';
+            $json_data['message'] = 'ข้อมูลไม่ครบถ้วน';
+            break;
+        }
+
+        $sql = "";
+        $params = [$dept, $start_date, $end_date];
+
+        if ($type === 'sent') {
+            // ดูรายการที่แผนกนี้เป็นคน "ส่ง"
+            $sql = "SELECT d.document_code, d.title, d.created_at, d.current_status, d.receiver_name as target_name
+                    FROM documents d 
+                    JOIN users u ON d.created_by = u.user_id 
+                    WHERE u.department = ? 
+                    AND DATE(d.created_at) BETWEEN ? AND ? 
+                    ORDER BY d.created_at DESC";
+        } else {
+            // ดูรายการที่แผนกนี้เป็นคน "รับ"
+            $sql = "SELECT d.document_code, d.title, d.created_at, d.current_status, d.sender_name as target_name
+                    FROM documents d 
+                    JOIN users u ON d.receiver_name = u.fullname 
+                    WHERE u.department = ? 
+                    AND DATE(d.created_at) BETWEEN ? AND ? 
+                    ORDER BY d.created_at DESC";
+        }
+
+        $details = CON::selectArrayDB($params, $sql);
+        
+        // จัดรูปแบบวันที่
+        if ($details) {
+            foreach ($details as &$row) {
+                $row['created_at_fmt'] = date('d/m/Y H:i', strtotime($row['created_at']));
+            }
+        }
+
+        $json_data['status'] = 'success';
+        $json_data['data']   = $details ?? [];
+        break;
     
 
     default:
