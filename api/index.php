@@ -203,7 +203,6 @@ switch ( $GET_DEV ) {
         $doc_code = sanitizeGetParam( 'code', 'alphanumeric', '' );
         $action   = sanitizeGetParam( 'action', 'alphanumeric', '' );
 
-
         if ( empty( $doc_code ) ) {
             http_response_code( 400 );
             $json_data['status']  = 'error';
@@ -211,13 +210,7 @@ switch ( $GET_DEV ) {
             break;
         }
 
-        // เช็คว่า action = scan ถึงจะบวกยอด
-        if ( $action === 'scan' ) {
-            $stmtCount = "UPDATE documents SET view_count = view_count + 1 WHERE document_code = ?";
-            CON::updateDB( [$doc_code], $stmtCount );
-        }
-
-        // ดึงข้อมูลเอกสาร
+        // 1. ดึงข้อมูลเอกสาร
         $docSql = "SELECT d.*, dt.type_name
                    FROM documents d
                    LEFT JOIN document_type dt ON d.type_id = dt.type_id
@@ -233,7 +226,32 @@ switch ( $GET_DEV ) {
 
         $doc = $docResult[0];
 
-        // ดึงประวัติ (Timeline)
+        // 2. ถ้าเป็นการ Scan ให้บันทึก Log และบวกยอดวิว
+        if ( $action === 'scan' ) {
+            // 2.1 บวกยอดวิว
+            $stmtCount = "UPDATE documents SET view_count = view_count + 1 WHERE document_code = ?";
+            CON::updateDB( [$doc_code], $stmtCount );
+
+            // 2.2 --- เพิ่มใหม่: บันทึก Log ว่า "เปิดดู" ---
+            $viewer_line_id = isset($_GET['line_id']) ? htmlspecialchars($_GET['line_id'], ENT_QUOTES, 'UTF-8') : '';
+            $viewer_name    = isset($_GET['name']) ? htmlspecialchars($_GET['name'], ENT_QUOTES, 'UTF-8') : 'Guest';
+            $viewer_pic     = isset($_GET['pic']) ? htmlspecialchars($_GET['pic'], ENT_QUOTES, 'UTF-8') : ''; // รับ URL รูป
+            $ip_address     = $_SERVER['REMOTE_ADDR'] ?? '';
+            $device_info    = 'Scan (View)';
+
+            // บันทึกสถานะ "เปิดอ่าน" หรือ "Viewed"
+            $logSql = "INSERT INTO document_status_log 
+                       (document_id, status, line_user_id_action, ip_address, device_info, actor_name_snapshot, actor_pic_snapshot, location_note) 
+                       VALUES (?, 'เปิดอ่าน', ?, ?, ?, ?, ?, 'สแกน QR Code')";
+            
+            CON::updateDB( 
+                [$doc['document_id'], $viewer_line_id, $ip_address, $device_info, $viewer_name, $viewer_pic], 
+                $logSql 
+            );
+            // ----------------------------------------
+        }
+
+        // 3. ดึงประวัติ (Timeline)
         $logSql = "SELECT l.*, u.fullname, u.username
                    FROM document_status_log l
                    LEFT JOIN users u ON l.action_by = u.user_id
@@ -252,18 +270,14 @@ switch ( $GET_DEV ) {
             $json_data['status']  = 'error';
             $json_data['message'] = 'ระบุคำค้นหา';
         } else {
-            // [Security Fix] Escape ตัวอักษร % และ _ เพื่อป้องกัน Wildcard Injection
             $keyword_safe = addcslashes($keyword, "%_");
-
             $sql = "SELECT d.*, dt.type_name 
                     FROM documents d
                     LEFT JOIN document_type dt ON d.type_id = dt.type_id
                     WHERE d.document_code LIKE ? OR d.title LIKE ?
                     ORDER BY d.created_at DESC LIMIT 10";
             
-            // ใช้ตัวแปรที่ escape แล้ว
             $params = ["%$keyword_safe%", "%$keyword_safe%"];
-            
             $json_data['data']   = CON::selectArrayDB( $params, $sql );
             $json_data['status'] = 'success';
         }
@@ -321,35 +335,30 @@ switch ( $GET_DEV ) {
         break;
 
     case 'update-status':
-        // 1. รับค่าจาก POST Data
         $inputData = $_POST;
         $contentType = $_SERVER["CONTENT_TYPE"] ?? '';
         if (stripos($contentType, 'application/json') !== false) {
             $inputData = json_decode(file_get_contents('php://input'), true) ?? [];
         }
 
-        // [Security Fix] ฟังก์ชันสำหรับทำความสะอาดข้อมูล (ป้องกัน XSS)
         function clean_input($data) {
             return htmlspecialchars(trim($data ?? ''), ENT_QUOTES, 'UTF-8');
         }
 
-        // ใช้ clean_input กับทุกค่าที่เป็น String ที่รับเข้ามา
         $doc_code      = clean_input($inputData['doc_code'] ?? '');
         $new_status    = clean_input($inputData['status'] ?? 'Received');
         $next_receiver = clean_input($inputData['receiver_name'] ?? '');
-        $line_user_id  = clean_input($inputData['line_user_id'] ?? ''); // ปกติเป็น ID แต่อาจเป็น string ได้
+        $line_user_id  = clean_input($inputData['line_user_id'] ?? ''); 
         $device_info   = clean_input($inputData['device_info'] ?? 'Unknown');
         $display_name  = clean_input($inputData['display_name'] ?? 'Unknown User');
-        $picture_url   = clean_input($inputData['picture_url'] ?? ''); // URL ควร validate เพิ่มว่าเป็น URL จริงไหม แต่เบื้องต้น clean_input ก็พอ
+        $picture_url   = clean_input($inputData['picture_url'] ?? ''); 
 
-        // หา IP Address
         $ip_address = $_SERVER['HTTP_CLIENT_IP'] ?? $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? '';
 
         if ( empty( $doc_code ) ) {
             $json_data['status']  = 'error';
             $json_data['message'] = 'Error: No Code';
         } else {
-            // 2. หา ID เอกสาร
             $sqlDoc = "SELECT document_id FROM documents WHERE document_code = ?";
             $resDoc = CON::selectArrayDB( [$doc_code], $sqlDoc );
 
@@ -359,7 +368,6 @@ switch ( $GET_DEV ) {
             } else {
                 $doc_id = $resDoc[0]['document_id'];
 
-                // 3. อัปเดตสถานะหลัก
                 $updateParams = [$new_status];
                 $updateSql = "UPDATE documents SET current_status = ?";
                 if ( !empty( $next_receiver ) ) {
@@ -370,8 +378,6 @@ switch ( $GET_DEV ) {
                 $updateParams[] = $doc_id;
                 CON::updateDB( $updateParams, $updateSql );
 
-                // 4. บันทึก Log
-                // หา user_id ในระบบ (ถ้ามี)
                 $action_by = NULL;
                 if ( !empty( $line_user_id ) ) {
                     $sqlUser = "SELECT user_id FROM users WHERE line_user_id = ?";
@@ -392,7 +398,6 @@ switch ( $GET_DEV ) {
     case 'manage-workflow':
         $jsonFile = __DIR__ . '/data/workflow_data.json';
 
-        // Helper Closures (ฟังก์ชันช่วยจัดการ JSON)
         $getJson = function() use ($jsonFile) {
             if (!file_exists($jsonFile)) {
                 if (!is_dir(dirname($jsonFile))) mkdir(dirname($jsonFile), 0777, true);
@@ -425,8 +430,6 @@ switch ( $GET_DEV ) {
         try {
             if ($action === 'list') {
                 $data = $getJson();
-
-                // 1. ตรวจสอบว่ามีหมวดพื้นฐานหรือยัง?
                 $hasDefault = false;
                 foreach ($data as $cat) {
                     if (isset($cat['id']) && $cat['id'] === 'cat_default') {
@@ -434,15 +437,11 @@ switch ( $GET_DEV ) {
                         break;
                     }
                 }
-
-                // 2. ถ้ายังไม่มี ให้แทรกเข้าไปเป็น "อันแรก"
                 if (!$hasDefault) {
                     $defaultCategory = $getDefaultData();
                     array_unshift($data, $defaultCategory);
                     $saveJson($data);
                 }
-
-                // 3. กรองข้อมูลตาม User
                 if ($currentUser) {
                     $data = array_values(array_filter($data, function($item) use ($currentUser) {
                         $isOwner = isset($item['created_by']) && $item['created_by'] == $currentUser;
@@ -450,7 +449,6 @@ switch ( $GET_DEV ) {
                         return $isOwner || $isSystem;
                     }));
                 }
-
                 $json_data['success'] = true;
                 $json_data['data'] = $data;
                 $json_data['status'] = 'success';
@@ -477,7 +475,6 @@ switch ( $GET_DEV ) {
             elseif ($action === 'edit_category') {
                 $id = $_POST['id'] ?? '';
                 $name = $_POST['category_name'] ?? '';
-
                 if ($id === 'cat_default') {
                     $json_data['success'] = false;
                     $json_data['message'] = 'ไม่สามารถแก้ไขชื่อหมวดหมู่พื้นฐานได้';
@@ -529,7 +526,6 @@ switch ( $GET_DEV ) {
                 $stId = $_POST['status_id'] ?? '';
                 $name = $_POST['status_name'] ?? '';
                 $color = $_POST['color_class'] ?? 'secondary';
-
                 if ($catId && $stId) {
                     $data = $getJson();
                     foreach ($data as &$cat) {
@@ -551,7 +547,6 @@ switch ( $GET_DEV ) {
             elseif ($action === 'delete_status') {
                 $catId = $_POST['category_id'] ?? '';
                 $statusId = $_POST['status_id'] ?? '';
-
                 if (strpos($statusId, 'st_def_') === 0) {
                     $json_data['success'] = false;
                     $json_data['message'] = 'ไม่สามารถลบสถานะพื้นฐานของระบบได้';
@@ -603,17 +598,14 @@ switch ( $GET_DEV ) {
             $json_data['message'] = 'Error: ' . $e->getMessage();
         }
         break;
-   // --- ส่วนที่เพิ่มใหม่สำหรับรายงาน ---
+        
     case 'report':
-        // รับค่าช่วงเวลา
         $start_date = sanitizeGetParam('start_date', 'string', date('Y-m-01'));
         $end_date   = sanitizeGetParam('end_date', 'string', date('Y-m-t'));
         
-        // ตรวจสอบสิทธิ์
         $is_admin  = ( stripos( $_SESSION['role'] ?? '', 'admin' ) !== false );
         $user_dept = $_SESSION['department'] ?? '';
 
-        // 1. ดึงรายชื่อแผนก
         $dept_params = [];
         $sql_dept = "SELECT DISTINCT department FROM users WHERE department IS NOT NULL AND department != ''";
         if ( !$is_admin && !empty( $user_dept ) ) {
@@ -629,7 +621,6 @@ switch ( $GET_DEV ) {
         foreach ( $departments as $row ) {
             $dept = $row['department'];
 
-            // A. นับยอดส่งออก (Sent)
             $sql_sent = "SELECT COUNT(*) as count 
                          FROM documents d 
                          JOIN users u ON d.created_by = u.user_id 
@@ -638,7 +629,6 @@ switch ( $GET_DEV ) {
             $res_sent = CON::selectArrayDB( [$dept, $start_date, $end_date], $sql_sent );
             $sent_count = (int)($res_sent[0]['count'] ?? 0);
 
-            // B. นับยอดรับเข้า (Received)
             $sql_recv = "SELECT COUNT(*) as count 
                          FROM documents d 
                          JOIN users u ON d.receiver_name = u.fullname 
@@ -669,7 +659,7 @@ switch ( $GET_DEV ) {
 
     case 'report_detail':
         $dept       = sanitizeGetParam('department', 'string', '');
-        $type       = sanitizeGetParam('type', 'string', ''); // 'sent' หรือ 'received'
+        $type       = sanitizeGetParam('type', 'string', '');
         $start_date = sanitizeGetParam('start_date', 'string', '');
         $end_date   = sanitizeGetParam('end_date', 'string', '');
 
@@ -683,7 +673,6 @@ switch ( $GET_DEV ) {
         $params = [$dept, $start_date, $end_date];
 
         if ($type === 'sent') {
-            // ดูรายการที่แผนกนี้เป็นคน "ส่ง"
             $sql = "SELECT d.document_code, d.title, d.created_at, d.current_status, d.receiver_name as target_name
                     FROM documents d 
                     JOIN users u ON d.created_by = u.user_id 
@@ -691,7 +680,6 @@ switch ( $GET_DEV ) {
                     AND DATE(d.created_at) BETWEEN ? AND ? 
                     ORDER BY d.created_at DESC";
         } else {
-            // ดูรายการที่แผนกนี้เป็นคน "รับ"
             $sql = "SELECT d.document_code, d.title, d.created_at, d.current_status, d.sender_name as target_name
                     FROM documents d 
                     JOIN users u ON d.receiver_name = u.fullname 
@@ -702,7 +690,6 @@ switch ( $GET_DEV ) {
 
         $details = CON::selectArrayDB($params, $sql);
         
-        // จัดรูปแบบวันที่
         if ($details) {
             foreach ($details as &$row) {
                 $row['created_at_fmt'] = date('d/m/Y H:i', strtotime($row['created_at']));
@@ -713,7 +700,6 @@ switch ( $GET_DEV ) {
         $json_data['data']   = $details ?? [];
         break;
     
-
     default:
         http_response_code( 400 );
         $json_data = [
@@ -721,7 +707,6 @@ switch ( $GET_DEV ) {
             'message' => 'ไม่ได้ระบุหมายเหตุหรือ action:' . $GET_DEV . ' ไม่ถูกต้อง'
         ];
         break;
-        
 }
 
 echo json_encode( $json_data, JSON_UNESCAPED_UNICODE );

@@ -1,5 +1,3 @@
-
-
 <div class="d-flex justify-content-center w-100">
     <div class="col-md-5 col-sm-8 col-12">
         
@@ -23,7 +21,7 @@
                         กดปุ่มด้านล่างเพื่อเปิดกล้อง<br>ผ่านแอปพลิเคชัน LINE
                     </p>
                     
-                    <button class="btn btn-success btn-lg rounded-pill px-5 py-3 shadow-sm fw-bold" onclick="openLineScanner()">
+                    <button id="btn-scan" class="btn btn-success btn-lg rounded-pill px-5 py-3 shadow-sm fw-bold">
                         <i class="fas fa-camera me-2"></i> สแกน QR Code
                     </button>
                 </div>
@@ -34,7 +32,7 @@
             <h4 class="fw-bold mb-3">🔍 ค้นหาเอกสาร</h4>
             <div class="input-group mb-4 shadow-sm">
                 <input type="text" id="searchInput" class="form-control border-0 py-3" placeholder="เลขที่เอกสาร หรือ ชื่อเรื่อง...">
-                <button class="btn btn-success px-4" onclick="searchDocs()"><i class="fas fa-search"></i></button>
+                <button id="btn-search" class="btn btn-success px-4"><i class="fas fa-search"></i></button>
             </div>
             <div id="searchResultArea">
                 <p class="text-center text-muted mt-5"><i class="fas fa-search fa-3x opacity-25"></i><br>พิมพ์คำค้นหาด้านบน</p>
@@ -51,7 +49,7 @@
         </div>
 
         <div id="detailOverlay" style="display: none;">
-            <button class="btn btn-light rounded-circle shadow-sm position-absolute top-0 end-0 m-3" onclick="closeDetail()" style="z-index: 1050;">
+            <button id="btn-close-detail" class="btn btn-light rounded-circle shadow-sm position-absolute top-0 end-0 m-3" style="z-index: 1050;">
                 <i class="fas fa-times fa-lg"></i>
             </button>
             
@@ -73,7 +71,7 @@
                 <div id="detailTimeline" class="small ps-1"></div>
 
                 <div class="d-grid gap-2 mt-4 pt-4">
-                    <button class="btn btn-success rounded-pill py-3 fw-bold shadow" onclick="openUpdateModal()">
+                    <button id="btn-open-update" class="btn btn-success rounded-pill py-3 fw-bold shadow">
                         <i class="fas fa-edit me-2"></i> อัปเดตสถานะ
                     </button>
                 </div>
@@ -82,13 +80,13 @@
     </div>
 
     <div class="bottom-nav">
-        <div class="nav-item active" onclick="switchTab('scan')">
+        <div id="tab-btn-scan" class="nav-item active" style="cursor: pointer;">
             <i class="fas fa-qrcode"></i><span>สแกน</span>
         </div>
-        <div class="nav-item" onclick="switchTab('search')">
+        <div id="tab-btn-search" class="nav-item" style="cursor: pointer;">
             <i class="fas fa-search"></i><span>ค้นหา</span>
         </div>
-        <div class="nav-item" onclick="switchTab('history')">
+        <div id="tab-btn-history" class="nav-item" style="cursor: pointer;">
             <i class="fas fa-history"></i><span>ประวัติ</span>
         </div>
     </div>

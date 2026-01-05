@@ -1,6 +1,6 @@
 <?php
-    $page_title   = "ประวัติการทำงานของคุณ";
-    $header_class = "header-scan-history"; // ใช้ Class สีใหม่
+    $page_title   = "ประวัติการสแกน/อัปเดตล่าสุด";
+    $header_class = "header-scan-history";
     include 'includes/topbar.php';
 
     // ---------------------------------------------------------
@@ -28,8 +28,8 @@
                 'type' => $d['type_name'] ?? '-',
                 'status' => $d['current_status'],
                 'created_at' => date('d/m/Y H:i', strtotime($d['created_at'])),
-                'sender' => $d['sender'] ?? '-',
-                'receiver' => $d['receiver'] ?? '-',
+                'sender' => $d['sender_name'] ?? '-',
+                'receiver' => $d['receiver_name'] ?? '-',
                 'view_count' => number_format($d['view_count'] ?? 0)
             ];
 
@@ -45,33 +45,25 @@
                 foreach ($histData as $h) {
                     $h_time = date('d/m/Y H:i', strtotime($h['action_time']));
                     
-                    // --- Identity Detection ---
+                    // --- Identity Detection (ใน Modal) ---
                     $found_name = '';
                     if (!empty($h['actor_name_snapshot'])) {
                         $found_name = $h['actor_name_snapshot'];
-                    } elseif (!empty($h['first_name'])) {
-                        $found_name = $h['first_name'] . ' ' . ($h['last_name'] ?? '');
-                    } elseif (!empty($h['name'])) {
-                        $found_name = $h['name'];
+                    } elseif (!empty($h['fullname'])) {
+                        $found_name = $h['fullname'];
                     } elseif (!empty($h['username'])) {
                         $found_name = $h['username'];
                     }
                     
-                    if (empty($found_name) && isset($_SESSION['user_id']) && isset($h['action_by'])) {
-                        if ($h['action_by'] == $_SESSION['user_id']) {
-                            if (!empty($_SESSION['user_name'])) $found_name = $_SESSION['user_name'] . " (คุณ)";
-                            elseif (!empty($_SESSION['name'])) $found_name = $_SESSION['name'] . " (คุณ)";
-                        }
+                    if (empty($found_name)) {
+                         $found_name = "User ID: " . ($h['action_by'] ?? 'Unknown');
                     }
 
-                    $user_name = !empty($found_name) ? $found_name : "User ID: " . ($h['action_by'] ?? 'Unknown');
-                    
-                    // Image Check
+                    // Image Check (เอา profile_img ออก)
                     $img_src = '';
-                    if (!empty($h['actor_pic_snapshot'])) $img_src = $h['actor_pic_snapshot'];
-                    elseif (!empty($h['profile_img'])) $img_src = $h['profile_img'];
-                    elseif (!empty($h['image'])) $img_src = $h['image'];
-                    elseif (!empty($h['avatar'])) $img_src = $h['avatar'];
+                    if (!empty($h['actor_pic_snapshot'])) {
+                        $img_src = $h['actor_pic_snapshot'];
+                    }
                     
                     if (!empty($img_src)) {
                         $user_icon = "
@@ -101,7 +93,7 @@
                                 <div class='d-flex align-items-center mb-1'>
                                     $user_icon
                                     <div>
-                                        <span class='fw-bold text-dark d-block' style='line-height:1.2;'>$user_name</span>
+                                        <span class='fw-bold text-dark d-block' style='line-height:1.2;'>$found_name</span>
                                         <span class='badge bg-light text-secondary border rounded-pill small'>$h_status</span>
                                     </div>
                                 </div>
@@ -127,7 +119,7 @@
     }
 
     // ---------------------------------------------------------
-    // Main Page Logic
+    // ส่วนที่ 2: Main Page Logic (แก้ไข SQL: เอา u.profile_img ออก)
     // ---------------------------------------------------------
     function getStatusBadge($status) {
         switch ($status) {
@@ -135,18 +127,22 @@
             case 'Registered': return '<span class="badge rounded-pill bg-info text-dark">ลงทะเบียนใหม่</span>';
             case 'Sent': return '<span class="badge rounded-pill bg-warning text-dark">กำลังนำส่ง</span>';
             case 'Late': return '<span class="badge rounded-pill bg-danger">ล่าช้า</span>';
+            case 'เปิดอ่าน': case 'Viewed': return '<span class="badge rounded-pill bg-light text-dark border">เปิดอ่าน</span>';
             default: return '<span class="badge rounded-pill bg-secondary">' . htmlspecialchars($status) . '</span>';
         }
     }
 
-    $sql = "SELECT l.*, d.title, d.document_code, d.current_status 
+    // แก้ไข SQL: เอา u.profile_img ออก เพราะไม่มีในตาราง users
+    $sql = "SELECT l.*, d.title, d.document_code, d.current_status, 
+                   u.fullname, u.username, 
+                   l.actor_name_snapshot, l.actor_pic_snapshot
             FROM document_status_log l 
             JOIN documents d ON l.document_id = d.document_id 
-            WHERE l.action_by = ? 
+            LEFT JOIN users u ON l.action_by = u.user_id 
             ORDER BY l.action_time DESC 
             LIMIT 50";
             
-    $history = CON::selectArrayDB([$_SESSION['user_id']], $sql) ?? [];
+    $history = CON::selectArrayDB([], $sql) ?? [];
 
     $historyRows = '';
     if (count($history) > 0) {
@@ -159,9 +155,34 @@
             $device = htmlspecialchars($row['device_info'] ?? '-', ENT_QUOTES, 'UTF-8');
             $docId = $row['document_id'];
 
-            // --- แก้ไขจุดนี้: ลบ onclick ออก และใช้ class/data-id แทน เพื่อเลี่ยง CSP Error ---
+            // --- ส่วนระบุตัวตนคนสแกน ---
+            $actorName = 'Unknown';
+            if (!empty($row['actor_name_snapshot'])) {
+                $actorName = $row['actor_name_snapshot'];
+            } elseif (!empty($row['fullname'])) {
+                $actorName = $row['fullname'];
+            } elseif (!empty($row['username'])) {
+                $actorName = $row['username'];
+            }
+
+            // รูปภาพคนสแกน (ใช้เฉพาะจาก Snapshot หรือ Default)
+            $actorImg = 'assets/images/avatar_default.png'; 
+            if (!empty($row['actor_pic_snapshot'])) {
+                $actorImg = $row['actor_pic_snapshot'];
+            }
+
+            // HTML แสดง User
+            $userDisplay = "
+            <div class='d-flex align-items-center'>
+                <div class='me-2' style='width:30px; height:30px;'>
+                     <img src='$actorImg' class='rounded-circle border w-100 h-100' style='object-fit:cover;' 
+                          onerror=\"this.src='https://via.placeholder.com/30?text=U';\">
+                </div>
+                <div class='text-dark fw-bold text-truncate' style='font-size:0.85rem; max-width: 150px;'>$actorName</div>
+            </div>";
+            // ------------------------------------------
+
             $codeLink = "<a href='javascript:void(0)' class='doc-link shadow-sm btn-open-detail' data-id='$docId'><i class='fas fa-search me-1'></i>$code</a>";
-            
             $statusBadge = getStatusBadge($status);
 
             $historyRows .= "<tr>
@@ -170,6 +191,7 @@
                     $codeLink
                     <div class='mt-1 text-dark small'>$title</div>
                 </td>
+                <td>$userDisplay</td>
                 <td>$statusBadge</td>
                 <td class='text-muted small'>
                     <div><i class='fas fa-desktop me-1'></i>$ip</div>
@@ -178,7 +200,7 @@
             </tr>";
         }
     } else {
-        $historyRows = '<tr><td colspan="4" class="text-center py-5 text-muted">ยังไม่พบประวัติการทำงานของคุณ</td></tr>';
+        $historyRows = '<tr><td colspan="5" class="text-center py-5 text-muted">ยังไม่พบประวัติการทำงานในระบบ</td></tr>';
     }
 ?>
 
@@ -195,7 +217,7 @@
 
 <div class="page-content">
     
-    <h5 class="mb-4 fw-bold text-secondary">**🕒 รายการที่คุณเคยสแกน/อัปเดต**</h5>
+    <h5 class="mb-4 fw-bold text-secondary">**🕒 ประวัติการสแกน/อัปเดตล่าสุด (ทั้งหมด)**</h5>
 
     <div class="table-responsive rounded-4 shadow-sm border">
         <table class="table table-hover mb-0 align-middle">
@@ -203,6 +225,7 @@
                 <tr>
                     <th class="py-3 ps-4">เวลา</th>
                     <th class="py-3">เอกสาร (กดเพื่อดูรายละเอียด)</th>
+                    <th class="py-3">ผู้ดำเนินการ</th>
                     <th class="py-3">สถานะตอนสแกน</th>
                     <th class="py-3">อุปกรณ์</th>
                 </tr>
