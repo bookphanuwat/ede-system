@@ -24,11 +24,17 @@ async function main() {
         var imgEl = document.getElementById("userImg");
         var nameEl = document.getElementById("userName");
         
-        if (imgEl && userProfile.pictureUrl) imgEl.src = userProfile.pictureUrl;
-        if (nameEl && userProfile.displayName) nameEl.innerText = userProfile.displayName;
+        if (imgEl && userProfile.pictureUrl) {
+            imgEl.src = userProfile.pictureUrl;
+        }
+        if (nameEl) {
+            nameEl.innerText = userProfile.displayName || "Guest";
+        }
 
     } catch (err) {
         console.error("LIFF Init Error:", err);
+        var nameEl = document.getElementById("userName");
+        if (nameEl) nameEl.innerText = "Guest (Error)";
     }
 }
 
@@ -162,7 +168,7 @@ async function searchDocs() {
 async function loadHistory() {
     try {
         var resultArea = document.getElementById("historyListArea");
-        const res = await fetch(API_BASE + '/api/index.php?dev=history&line_id=' + userProfile.userId);
+        const res = await fetch(`${API_BASE}/api/index.php?dev=history&line_id=${userProfile.userId}`);
         const json = await res.json();
         var html = "";
         if (json.data && json.data.length > 0) {
@@ -189,13 +195,13 @@ async function loadDocDetail(code, fromScanner) {
     if (!fromScanner) Swal.fire({ title: "Loading...", didOpen: function() { Swal.showLoading() } });
     
     try {
-        var url = API_BASE + '/api/getdocinfo/' + code + '/'; 
+        var url = `${API_BASE}/api/getdocinfo/${code}/`; 
         
         if (fromScanner) {
             url += "?action=scan";
-            url += "&line_id=" + encodeURIComponent(userProfile.userId || '');
-            url += "&name=" + encodeURIComponent(userProfile.displayName || 'Guest');
-            url += "&pic=" + encodeURIComponent(userProfile.pictureUrl || '');
+            url += `&line_id=${encodeURIComponent(userProfile.userId || '')}`;
+            url += `&name=${encodeURIComponent(userProfile.displayName || 'Guest')}`;
+            url += `&pic=${encodeURIComponent(userProfile.pictureUrl || '')}`;
         }
         
         const res = await fetch(url);
@@ -245,7 +251,8 @@ function closeDetail() {
 async function openUpdateModal() {
     var statusOptions = "";
     try {
-        const res = await fetch(API_BASE + '/api/index.php?dev=get-statuses&workflow_id=' + currentDocWorkflowId);
+        // [แก้ไข 3] ส่ง workflow_id ไปถาม API
+        const res = await fetch(`${API_BASE}/api/index.php?dev=get-statuses&workflow_id=${currentDocWorkflowId}`);
         const json = await res.json();
         
         if (json.status === "success" && json.data.length > 0) {
@@ -302,7 +309,7 @@ async function openUpdateModal() {
             device_info: liff.getOS()
         };
 
-        await fetch(API_BASE + '/api/index.php?dev=update-status', { 
+        await fetch(`${API_BASE}/api/index.php?dev=update-status`, { 
             method: "POST", 
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload) 
