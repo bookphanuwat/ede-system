@@ -30,6 +30,9 @@ async function main() {
         if (nameEl) {
             nameEl.innerText = userProfile.displayName || "Guest";
         }
+        
+        // **หมายเหตุ:** ในเวอร์ชันนี้เราจะไม่เรียก openLineScanner() ที่นี่ 
+        // เพื่อให้กล้องเปิดเฉพาะตอนกดปุ่มเท่านั้น
 
     } catch (err) {
         console.error("LIFF Init Error:", err);
@@ -65,6 +68,7 @@ function setupEventListeners() {
     }
     
     // 3. Buttons
+    // ปุ่มสแกน: เมื่อกดปุ่มนี้ ฟังก์ชัน openLineScanner จะทำงาน
     var scanBtn = document.getElementById("btn-scan");
     if(scanBtn) scanBtn.addEventListener("click", openLineScanner);
     
@@ -106,7 +110,7 @@ function switchTab(tabName) {
         navItems[j].classList.remove("active");
     }
     
-    // ตั้งค่า Active ให้ปุ่มเมนู (แก้ไข: ไม่ใช้ ?. แล้ว)
+    // ตั้งค่า Active ให้ปุ่มเมนู
     var activeBtn = null;
     if (tabName === 'scan') activeBtn = document.getElementById("tab-btn-scan");
     else if (tabName === 'search') activeBtn = document.getElementById("tab-btn-search");
@@ -122,6 +126,7 @@ function switchTab(tabName) {
 
 // --- Scanner ---
 async function openLineScanner() {
+    // ตรวจสอบว่าเป็น Mobile App หรือไม่
     if (liff.isInClient() && liff.getOS() !== "web") {
         try {
             const result = await liff.scanCodeV2();
@@ -143,7 +148,6 @@ async function searchDocs() {
     if (keyword) {
         resultArea.innerHTML = '<div class="text-center mt-3"><i class="fas fa-spinner fa-spin"></i> กำลังค้นหา...</div>';
         try {
-            // ใช้ API_BASE
             const res = await fetch(API_BASE + '/api/index.php?dev=search&keyword=' + encodeURIComponent(keyword));
             const json = await res.json();
             var html = "";
@@ -188,7 +192,6 @@ async function loadHistory() {
 
 // --- Load Detail ---
 async function loadDocDetail(code, fromScanner) {
-    // กำหนดค่า default สำหรับ fromScanner
     if (typeof fromScanner === 'undefined') fromScanner = false;
 
     currentDocCode = code;
@@ -251,7 +254,6 @@ function closeDetail() {
 async function openUpdateModal() {
     var statusOptions = "";
     try {
-        // [แก้ไข 3] ส่ง workflow_id ไปถาม API
         const res = await fetch(`${API_BASE}/api/index.php?dev=get-statuses&workflow_id=${currentDocWorkflowId}`);
         const json = await res.json();
         
@@ -319,7 +321,7 @@ async function openUpdateModal() {
     }
 }
 
-// ✅ เริ่มต้นการทำงาน (ปลอดภัยที่สุด)
+// ✅ เริ่มต้นการทำงาน
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function() {
         setupEventListeners();
