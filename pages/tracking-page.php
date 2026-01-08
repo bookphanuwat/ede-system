@@ -4,12 +4,13 @@
     include 'includes/topbar.php';
 
     $search_query = $_GET['search'] ?? '';
-    $doc_data = null;
+    $doc_data = null;       // สำหรับกรณีเจอ 1 รายการ
+    $doc_list = [];         // สำหรับกรณีเจอหลายรายการ
     $logs = [];
 
     // ตรวจสอบสิทธิ์
-    $is_admin = ( stripos( $_SESSION['role'], 'admin' ) !== false );
-    $user_id = $_SESSION['user_id'];
+    $is_admin = ( isset($_SESSION['role']) && stripos( $_SESSION['role'], 'admin' ) !== false );
+    $user_id = $_SESSION['user_id'] ?? 0;
 
     // ฟังก์ชันคำนวณเวลา
     function time_elapsed_string( $datetime, $full = false ) {
@@ -59,9 +60,14 @@
 
     // ค้นหาเอกสาร
     if ( !empty( $search_query ) ) {
-        $sql = "SELECT d.*, dt.type_name, u.fullname as creator_name FROM documents d LEFT JOIN document_type dt ON d.type_id = dt.type_id LEFT JOIN users u ON d.created_by = u.user_id WHERE (d.document_code = ? OR d.title LIKE ?)";
+        $sql = "SELECT d.*, dt.type_name, u.fullname as creator_name 
+                FROM documents d 
+                LEFT JOIN document_type dt ON d.type_id = dt.type_id 
+                LEFT JOIN users u ON d.created_by = u.user_id 
+                WHERE (d.document_code = ? OR d.title LIKE ?)";
 
         if ( !$is_admin ) {
+            // ถ้าไม่ใช่ Admin ค้นหาได้เฉพาะของตัวเอง
             $search_params = [$search_query, "%$search_query%", $user_id];
             $sql .= " AND d.created_by = ?";
         } else {
@@ -69,52 +75,63 @@
         }
 
         $doc_result = CON::selectArrayDB( $search_params, $sql );
-        $doc_data = ( $doc_result && count( $doc_result ) > 0 ) ? $doc_result[0] : null;
 
-        if ( $doc_data ) {
-            $sql_log = "SELECT l.*, u.fullname as db_user_name FROM document_status_log l LEFT JOIN users u ON l.action_by = u.user_id WHERE l.document_id = ? ORDER BY l.action_time DESC";
+        if ( $doc_result && count( $doc_result ) > 1 ) {
+            // กรณีเจอมากกว่า 1 รายการ (เช่น ค้นด้วยชื่อ) ให้เก็บลง doc_list เพื่อไปแสดงรายการเลือก
+            $doc_list = $doc_result;
+        } elseif ( $doc_result && count( $doc_result ) == 1 ) {
+            // กรณีเจอ 1 รายการ ให้ดึงข้อมูลมาแสดง Timeline เลย
+            $doc_data = $doc_result[0];
+            
+            $sql_log = "SELECT l.*, u.fullname as db_user_name 
+                        FROM document_status_log l 
+                        LEFT JOIN users u ON l.action_by = u.user_id 
+                        WHERE l.document_id = ? 
+                        ORDER BY l.action_time DESC";
             $logs = CON::selectArrayDB( [$doc_data['document_id']], $sql_log ) ?? [];
         }
     }
 
-    // สร้าง HTML timeline
+    // สร้าง HTML timeline (เฉพาะกรณีมี doc_data)
     $timelineHtml = '';
-    if ( count( $logs ) > 0 ) {
-        foreach ( $logs as $index => $log ) {
-            $actor_name = !empty( $log['actor_name_snapshot'] ) ? $log['actor_name_snapshot'] : ( $log['db_user_name'] ?? 'Unknown' );
-            $actor_pic = $log['actor_pic_snapshot'] ?? '';
-            $status = $log['status'] ?? '';
-            $action_time = date( 'd/m/Y H:i', strtotime( $log['action_time'] ) );
-            $device_info = $log['device_info'] ?? '';
-            $active_class = ( $index === 0 ) ? 'active' : '';
+    if ( $doc_data ) {
+        if ( count( $logs ) > 0 ) {
+            foreach ( $logs as $index => $log ) {
+                $actor_name = !empty( $log['actor_name_snapshot'] ) ? $log['actor_name_snapshot'] : ( $log['db_user_name'] ?? 'Unknown' );
+                $actor_pic = $log['actor_pic_snapshot'] ?? '';
+                $status = $log['status'] ?? '';
+                $action_time = date( 'd/m/Y H:i', strtotime( $log['action_time'] ) );
+                $device_info = $log['device_info'] ?? '';
+                $active_class = ( $index === 0 ) ? 'active' : '';
 
-            $pic_html = $actor_pic
-                ? "<img src='$actor_pic' class='rounded-circle me-2 border' width='30' height='30'>"
-                : "<div class='bg-secondary text-white rounded-circle me-2 d-flex align-items-center justify-content-center' style='width:30px;height:30px;font-size:12px;'><i class='fas fa-user'></i></div>";
+                $pic_html = $actor_pic
+                    ? "<img src='$actor_pic' class='rounded-circle me-2 border' width='30' height='30'>"
+                    : "<div class='bg-secondary text-white rounded-circle me-2 d-flex align-items-center justify-content-center' style='width:30px;height:30px;font-size:12px;'><i class='fas fa-user'></i></div>";
 
-            $device_html = !empty( $device_info )
-                ? "<small class='text-muted' style='font-size: 0.7rem;'><i class='fas fa-mobile-alt me-1'></i>$device_info</small>"
-                : '';
+                $device_html = !empty( $device_info )
+                    ? "<small class='text-muted' style='font-size: 0.7rem;'><i class='fas fa-mobile-alt me-1'></i>$device_info</small>"
+                    : '';
 
-            $timelineHtml .= "<div class='timeline-item'>
-                <div class='timeline-dot $active_class'></div>
-                <div class='ps-3'>
-                    <div class='d-flex justify-content-between align-items-start mb-1'>
-                        <h6 class='fw-bold text-dark mb-0'>$status</h6>
-                        <span class='badge bg-light text-secondary border'><i class='far fa-clock me-1'></i>$action_time</span>
-                    </div>
-                    <div class='d-flex align-items-center mt-2'>
-                        $pic_html
-                        <div>
-                            <p class='text-muted small mb-0'>ดำเนินการโดย: <strong>$actor_name</strong></p>
-                            $device_html
+                $timelineHtml .= "<div class='timeline-item'>
+                    <div class='timeline-dot $active_class'></div>
+                    <div class='ps-3'>
+                        <div class='d-flex justify-content-between align-items-start mb-1'>
+                            <h6 class='fw-bold text-dark mb-0'>$status</h6>
+                            <span class='badge bg-light text-secondary border'><i class='far fa-clock me-1'></i>$action_time</span>
+                        </div>
+                        <div class='d-flex align-items-center mt-2'>
+                            $pic_html
+                            <div>
+                                <p class='text-muted small mb-0'>ดำเนินการโดย: <strong>$actor_name</strong></p>
+                                $device_html
+                            </div>
                         </div>
                     </div>
-                </div>
-            </div>";
+                </div>";
+            }
+        } else {
+            $timelineHtml = '<p class="text-muted ps-3">ยังไม่มีประวัติ</p>';
         }
-    } else if ( $doc_data ) {
-        $timelineHtml = '<p class="text-muted ps-3">ยังไม่มีประวัติ</p>';
     }
 
 ?>
@@ -131,6 +148,10 @@
     .timeline-dot.active { background: var(--bs-success); box-shadow: 0 0 0 2px #c3e6cb; }
     .animate-fade-in { animation: fadeIn 0.5s ease-in-out; }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    
+    /* CSS สำหรับ List เลือกเอกสาร */
+    .doc-list-item { transition: all 0.2s; cursor: pointer; }
+    .doc-list-item:hover { background-color: #f8f9fa; transform: translateX(5px); }
 </style>
 
 <div class="page-content">
@@ -151,7 +172,34 @@
         </div>
     </form>
 
-    <?php if ( $doc_data ): ?>
+    <?php if ( !empty($doc_list) ): ?>
+        <div class="card border-0 shadow-sm rounded-4 overflow-hidden mx-auto animate-fade-in" style="max-width: 900px;">
+            <div class="card-header bg-white border-bottom p-3">
+                <h6 class="mb-0 text-success fw-bold"><i class="fas fa-list-ul me-2"></i>พบเอกสารที่ตรงกัน <?php echo count($doc_list); ?> รายการ</h6>
+            </div>
+            <div class="list-group list-group-flush">
+                <?php foreach ($doc_list as $item): ?>
+                    <a href="<?php echo SITE_URL; ?>/index.php?dev=tracking&search=<?php echo $item['document_code']; ?>" class="list-group-item list-group-item-action p-3 doc-list-item">
+                        <div class="d-flex w-100 justify-content-between align-items-center">
+                            <div>
+                                <h6 class="mb-1 fw-bold text-dark"><?php echo htmlspecialchars($item['title']); ?></h6>
+                                <small class="text-muted">
+                                    <i class="fas fa-barcode me-1"></i><?php echo htmlspecialchars($item['document_code']); ?> 
+                                    <span class="mx-2">|</span> 
+                                    <i class="far fa-clock me-1"></i><?php echo time_elapsed_string($item['created_at']); ?>
+                                </small>
+                            </div>
+                            <div>
+                                <?php echo getStatusBadge($item['current_status'] ?? '', $workflow_colors); ?>
+                                <i class="fas fa-chevron-right text-muted ms-3"></i>
+                            </div>
+                        </div>
+                    </a>
+                <?php endforeach; ?>
+            </div>
+        </div>
+
+    <?php elseif ( $doc_data ): ?>
         <div class="card border-0 shadow-sm rounded-4 overflow-hidden mx-auto animate-fade-in" style="max-width: 900px;">
             <div class="card-header border-0 p-4 d-flex justify-content-between align-items-center" style="background-color: rgba(102, 187, 106, 0.1);">
                 <div>
@@ -166,10 +214,11 @@
                 </div>
             </div>
         </div>
+
     <?php elseif ( !empty( $search_query ) ): ?>
-        <div class="text-center py-5">
+        <div class="text-center py-5 animate-fade-in">
             <h5 class="text-secondary">ไม่พบเอกสาร</h5>
-            <p class="text-muted small">คุณอาจไม่มีสิทธิ์เข้าถึงเอกสารนี้ หรือรหัสผิด</p>
+            <p class="text-muted small">ไม่พบข้อมูลที่ตรงกับคำค้นหา "<?php echo htmlspecialchars($search_query); ?>" หรือคุณอาจไม่มีสิทธิ์เข้าถึง</p>
         </div>
     <?php endif; ?>
 </div>
