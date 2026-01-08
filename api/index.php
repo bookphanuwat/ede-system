@@ -259,6 +259,13 @@ switch ( $GET_DEV ) {
                    ORDER BY l.action_time DESC";
         $logs = CON::selectArrayDB( [$doc['document_id']], $logSql ) ?? [];
 
+        // =========== [เพิ่มส่วนนี้] กรองสถานะ "เปิดอ่าน" ออก ===========
+        // เพื่อไม่ให้ Dashboard และหน้าทั่วไปเห็นว่าใครสแกนบ้าง
+        $logs = array_values(array_filter($logs, function($log) {
+            return !in_array($log['status'], ['เปิดอ่าน', 'Viewed']);
+        }));
+        // ==========================================================
+
         $json_data['status'] = 'success';
         $json_data['doc']    = $doc;
         $json_data['logs']   = $logs;

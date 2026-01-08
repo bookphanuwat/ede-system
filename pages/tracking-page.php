@@ -89,6 +89,12 @@
                         WHERE l.document_id = ? 
                         ORDER BY l.action_time DESC";
             $logs = CON::selectArrayDB( [$doc_data['document_id']], $sql_log ) ?? [];
+
+            // =========== [เพิ่มส่วนนี้] ===========
+            $logs = array_values(array_filter($logs, function($log) {
+                return !in_array($log['status'], ['เปิดอ่าน', 'Viewed']);
+            }));
+            //
         }
     }
 
