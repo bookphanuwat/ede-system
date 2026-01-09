@@ -103,109 +103,165 @@ body {
     &:hover { background-color: #f0f2f5; color: var(--color-dashboard); transform: translateX(5px); }
 }
 
-// LIFF Scan
-    .bottom-nav {
-        position: fixed;
-        bottom: 0;
-        left: 0;
-        width: 100%;
-        background: white;
-        box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
-        display: flex;
-        justify-content: space-around;
-        padding: 10px 0;
-        z-index: 1000;
-        border-top-left-radius: 20px;
-        border-top-right-radius: 20px;
-    }
+/* =========================================
+   Dashboard Styles (New Modern Design)
+   ========================================= */
+.doc-link {
+    color: #29B6F6; 
+    font-weight: bold; 
+    text-decoration: none;
+    background: rgba(41, 182, 246, 0.1); 
+    padding: 5px 10px; 
+    border-radius: 20px; 
+    transition: 0.2s;
+    
+    &:hover { background: #29B6F6; color: white; }
+}
 
-    .nav-item {
-        text-align: center;
-        color: #aaa;
-        flex-grow: 1;
-        cursor: pointer;
-        transition: 0.2s;
-    }
+.view-count-badge { 
+    font-size: 0.85rem; 
+    color: #555; 
+    background: #eee; 
+    padding: 5px 10px; 
+    border-radius: 15px; 
+    display: inline-flex; 
+    align-items: center; 
+    gap: 5px; 
+}
 
-    .nav-item i {
-        font-size: 1.5rem;
-        display: block;
-        margin-bottom: 2px;
-    }
+/* Modern Status Card */
+.status-card-modern {
+    background: #fff;
+    border: 0;
+    border-radius: 1rem;
+    transition: transform 0.2s, box-shadow 0.2s;
+    position: relative;
+    overflow: hidden;
 
-    .nav-item span {
-        font-size: 0.75rem;
+    &:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.08) !important;
     }
+}
 
-    .nav-item.active {
-        color: #00C853;
-        font-weight: bold;
-    }
+.status-color-strip {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 6px;
+}
 
-    .page-section {
-        display: none;
-        padding: 20px;
-    }
+.status-icon-bg {
+    position: absolute;
+    right: -10px;
+    bottom: -15px;
+    font-size: 5rem;
+    opacity: 0.08;
+    transform: rotate(-15deg);
+}
 
-    .page-section.active {
-        display: block;
-        animation: fadeIn 0.3s;
-    }
+/* =========================================
+   LIFF Scan Styles
+   ========================================= */
+.bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background: white;
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+    display: flex;
+    justify-content: space-around;
+    padding: 10px 0;
+    z-index: 1000;
+    border-top-left-radius: 20px;
+    border-top-right-radius: 20px;
+}
 
-    /* Camera Box */
-    .camera-box {
-        position: relative;
-        background: black;
-        border-radius: 20px;
-        overflow: hidden;
-        min-height: 300px;
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-    }
+.nav-item {
+    text-align: center;
+    color: #aaa;
+    flex-grow: 1;
+    cursor: pointer;
+    transition: 0.2s;
+}
 
-    #reader {
-        width: 100%;
-        height: 100%;
-    }
+.nav-item i {
+    font-size: 1.5rem;
+    display: block;
+    margin-bottom: 2px;
+}
 
-    .history-card,
-    .search-card {
-        background: white;
-        border-radius: 15px;
-        padding: 15px;
-        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-        margin-bottom: 15px;
-        border-left: 4px solid #ddd;
-        cursor: pointer;
-        transition: 0.2s;
-    }
+.nav-item span {
+    font-size: 0.75rem;
+}
 
-    .history-card:active,
-    .search-card:active {
-        transform: scale(0.98);
-        background: #f0f0f0;
-    }
+.nav-item.active {
+    color: #00C853;
+    font-weight: bold;
+}
 
-    .history-card.status-Received {
-        border-left-color: #00C853;
-    }
+.page-section {
+    display: none;
+    padding: 20px;
+}
 
-    .history-card.status-Sent {
-        border-left-color: #FFC107;
-    }
+.page-section.active {
+    display: block;
+    animation: fadeIn 0.3s;
+}
 
-   #detailOverlay {
-        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: white; z-index: 1040 !important; overflow-y: auto;
-        
-        }
+/* Camera Box */
+.camera-box {
+    position: relative;
+    background: black;
+    border-radius: 20px;
+    overflow: hidden;
+    min-height: 300px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+}
+
+#reader {
+    width: 100%;
+    height: 100%;
+}
+
+.history-card,
+.search-card {
+    background: white;
+    border-radius: 15px;
+    padding: 15px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+    margin-bottom: 15px;
+    border-left: 4px solid #ddd;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+.history-card:active,
+.search-card:active {
+    transform: scale(0.98);
+    background: #f0f0f0;
+}
+
+.history-card.status-Received {
+    border-left-color: #00C853;
+}
+
+.history-card.status-Sent {
+    border-left-color: #FFC107;
+}
+
+#detailOverlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: white; z-index: 1040 !important; overflow-y: auto;
+}
    
-   
-/* ... โค้ดเดิมข้างบน ... */
-
-    @keyframes fadeIn {
-        from { opacity: 0; }
-        to { opacity: 1; }
-    }
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
 
 
 /* Fix: บังคับให้ Modal และ Backdrop ของ Bootstrap อยู่เหนือ Overlay */
