@@ -338,7 +338,7 @@
                                 <div class="col-md-6"><small class="text-muted d-block">ประเภท</small><span id="d_type">...</span></div>
                                 <div class="col-md-6"><small class="text-muted d-block">วันที่สร้าง</small><span id="d_date">...</span></div>
                                 <div class="col-md-6"><small class="text-muted d-block">ผู้ส่ง</small><span id="d_sender">...</span></div>
-                                <div class="col-md-6"><small class="text-muted d-block">ผู้รับ</small><span id="d_receiver">...</span></div>
+                                <div class="col-md-6"><small class="text-muted d-block">ผู้ทำรายการล่าสุด</small><span id="d_receiver">...</span></div>
                             </div>
                         </div>
                     </div>

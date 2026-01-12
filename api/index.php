@@ -259,11 +259,22 @@ switch ( $GET_DEV ) {
                    ORDER BY l.action_time DESC";
         $logs = CON::selectArrayDB( [$doc['document_id']], $logSql ) ?? [];
 
-        // =========== [เพิ่มส่วนนี้] กรองสถานะ "เปิดอ่าน" ออก ===========
-        // เพื่อไม่ให้ Dashboard และหน้าทั่วไปเห็นว่าใครสแกนบ้าง
+        // =========== กรองสถานะ "เปิดอ่าน" ออก ===========
         $logs = array_values(array_filter($logs, function($log) {
             return !in_array($log['status'], ['เปิดอ่าน', 'Viewed']);
         }));
+        if (!empty($logs)) {
+            $latest_log = $logs[0]; // รายการแรกคือล่าสุด เพราะ ORDER BY DESC
+            
+            // เลือกใช้ชื่อจาก Snapshot (ชื่อใน LIFF) ถ้าไม่มีค่อยใช้ชื่อในระบบ (fullname)
+            $updater_name = !empty($latest_log['actor_name_snapshot']) 
+                            ? $latest_log['actor_name_snapshot'] 
+                            : $latest_log['fullname'];
+
+            if (!empty($updater_name)) {
+                $doc['receiver_name'] = $updater_name;
+            }
+        }
         // ==========================================================
 
         $json_data['status'] = 'success';
