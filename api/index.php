@@ -613,55 +613,45 @@ switch ( $GET_DEV ) {
         $is_admin  = ( stripos( $_SESSION['role'] ?? '', 'admin' ) !== false );
         $user_dept = $_SESSION['department'] ?? '';
 
-        $dept_params = [];
-        $sql_dept = "SELECT DISTINCT department FROM users WHERE department IS NOT NULL AND department != ''";
+        $params = [$start_date, $end_date];
+        
+        // [แก้ไข] เพิ่ม Subquery ดึงชื่อคนทำรายการล่าสุด (scanner_name) จาก log
+        // โดยไม่เอาสถานะ 'เปิดอ่าน' หรือ 'Viewed'
+        $sql = "SELECT d.document_code, d.title, d.created_at, d.current_status, d.receiver_name, 
+                       u.department as sender_dept, u.fullname as sender_name,
+                       (SELECT actor_name_snapshot 
+                        FROM document_status_log 
+                        WHERE document_id = d.document_id 
+                        AND status NOT IN ('เปิดอ่าน', 'Viewed') 
+                        ORDER BY action_time DESC LIMIT 1) as scanner_name
+                FROM documents d
+                LEFT JOIN users u ON d.created_by = u.user_id
+                WHERE DATE(d.created_at) BETWEEN ? AND ? ";
+        
         if ( !$is_admin && !empty( $user_dept ) ) {
-            $sql_dept .= " AND department = ?";
-            $dept_params[] = $user_dept;
+            $sql .= " AND (
+                        u.department = ? 
+                        OR d.receiver_name IN (SELECT fullname FROM users WHERE department = ?)
+                      )";
+            $params[] = $user_dept;
+            $params[] = $user_dept;
         }
-        $departments = CON::selectArrayDB( $dept_params, $sql_dept ) ?? [];
+        
+        $sql .= " ORDER BY u.department ASC, d.created_at DESC";
 
-        $report_data = [];
-        $grand_total_sent = 0;
-        $grand_total_recv = 0;
-
-        foreach ( $departments as $row ) {
-            $dept = $row['department'];
-
-            $sql_sent = "SELECT COUNT(*) as count 
-                         FROM documents d 
-                         JOIN users u ON d.created_by = u.user_id 
-                         WHERE u.department = ? 
-                         AND DATE(d.created_at) BETWEEN ? AND ?";
-            $res_sent = CON::selectArrayDB( [$dept, $start_date, $end_date], $sql_sent );
-            $sent_count = (int)($res_sent[0]['count'] ?? 0);
-
-            $sql_recv = "SELECT COUNT(*) as count 
-                         FROM documents d 
-                         JOIN users u ON d.receiver_name = u.fullname 
-                         WHERE u.department = ? 
-                         AND DATE(d.created_at) BETWEEN ? AND ?";
-            $res_recv = CON::selectArrayDB( [$dept, $start_date, $end_date], $sql_recv );
-            $recv_count = (int)($res_recv[0]['count'] ?? 0);
-
-            $report_data[] = [
-                'department' => $dept,
-                'sent'       => $sent_count,
-                'received'   => $recv_count,
-                'total'      => $sent_count + $recv_count
-            ];
-
-            $grand_total_sent += $sent_count;
-            $grand_total_recv += $recv_count;
+        $data = CON::selectArrayDB( $params, $sql );
+        
+        if($data) {
+            foreach($data as &$row) {
+                 $row['created_at_fmt'] = date('d/m/Y H:i', strtotime($row['created_at']));
+            }
+        } else {
+            $data = [];
         }
 
         $json_data['status'] = 'success';
-        $json_data['data']   = $report_data;
-        $json_data['summary'] = [
-            'sent'     => $grand_total_sent,
-            'received' => $grand_total_recv,
-            'total'    => $grand_total_sent + $grand_total_recv
-        ];
+        $json_data['data']   = $data;
+        $json_data['total_count'] = count($data);
         break;
 
     case 'report_detail':
