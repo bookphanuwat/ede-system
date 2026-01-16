@@ -232,6 +232,14 @@ async function loadDocDetail(code, fromScanner = false) {
         }
         document.getElementById("detailTimeline").innerHTML = timelineHtml;
         
+        // --- [START UPDATE] ควบคุมการแสดงปุ่มอัปเดตสถานะ ---
+        const updateBtn = document.getElementById("btn-open-update");
+        if (updateBtn) {
+            // แสดงเฉพาะเมื่อ fromScanner เป็น true (มาจากการสแกน)
+            updateBtn.style.display = fromScanner ? "" : "none";
+        }
+        // --- [END UPDATE] ---
+
         Swal.close();
         document.getElementById("detailOverlay").style.display = "block";
         document.body.style.overflow = "hidden"; 

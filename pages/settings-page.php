@@ -39,10 +39,23 @@
         }
     }
 
+    // --- [แก้ไขส่วนที่ 1] ตรวจสอบสิทธิ์และ Filter ข้อมูล ---
     $users = [];
-    // หมายเหตุ: เรียกใช้ Class CON ตามปกติ
-    $sql = "SELECT u.*, r.role_name FROM users u LEFT JOIN roles r ON u.role_id = r.role_id ORDER BY u.user_id ASC";
-    $users = CON::selectArrayDB( [], $sql ) ?? [];
+    $is_admin = ( isset($_SESSION['role']) && stripos( $_SESSION['role'], 'admin' ) !== false );
+    $current_user_id = $_SESSION['user_id'] ?? 0;
+
+    $sql = "SELECT u.*, r.role_name FROM users u LEFT JOIN roles r ON u.role_id = r.role_id ";
+    $params = [];
+
+    // ถ้าไม่ใช่ Admin ให้เพิ่มเงื่อนไข WHERE user_id = ของตัวเอง
+    if (!$is_admin) {
+        $sql .= " WHERE u.user_id = ? ";
+        $params[] = $current_user_id;
+    }
+
+    $sql .= " ORDER BY u.user_id ASC";
+    $users = CON::selectArrayDB( $params, $sql ) ?? [];
+    // ----------------------------------------------------
 
     // สร้าง HTML rows
     $userRows = '';
@@ -60,11 +73,13 @@
             if ( stripos( $roleNameRaw, 'admin' ) !== false ) $badgeColor = 'bg-primary';
             if ( stripos( $roleNameRaw, 'staff' ) !== false ) $badgeColor = 'bg-info text-dark';
 
-            // [แก้ไข 1] 
-            // - เปลี่ยน href จาก 'javascript:void(0);' เป็น '#' 
-            // - ลบ onclick ออก 
-            // - ใส่ class 'js-delete-user' เพื่อใช้ดักจับ Event แทน
-            // - ใส่ data-id และ data-username เพื่อส่งค่าไปที่ JS
+            // --- [แก้ไขส่วนที่ 2] ซ่อนปุ่มลบ ถ้าไม่ใช่ Admin ---
+            $deleteBtn = '';
+            if ($is_admin) {
+                $deleteBtn = "<a href='#' class='btn btn-sm btn-light rounded-pill border text-danger js-delete-user' data-id='$userId' data-username='$username' title='ลบ'><i class='fas fa-trash-alt'></i></a>";
+            }
+            // ------------------------------------------------
+
             $userRows .= "<tr>
                 <td class='ps-4'>
                     <div class='fw-bold'>$fullname</div>
@@ -74,7 +89,7 @@
                 <td class='text-center'><span class='badge rounded-pill $badgeColor px-3 py-2'>$roleName</span></td>
                 <td class='text-center'>
                     <a href='../settings_form.php?id=$userId' class='btn btn-sm btn-light rounded-pill border me-1 text-primary' title='แก้ไข'><i class='fas fa-edit'></i></a>
-                    <a href='#' class='btn btn-sm btn-light rounded-pill border text-danger js-delete-user' data-id='$userId' data-username='$username' title='ลบ'><i class='fas fa-trash-alt'></i></a>
+                    $deleteBtn
                 </td>
             </tr>";
         }
@@ -87,10 +102,13 @@
     <?php echo $alert_html; ?>
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h5 class="fw-bold text-secondary mb-0">**⚙️ จัดการผู้ใช้งาน**</h5>
+        
+        <?php if ($is_admin): ?>
         <a href="../settings_form.php" class="btn btn-success rounded-pill px-4 shadow-sm" style="background-color: #00E676; border:none; color:black; font-weight: bold;">
             <i class="fas fa-user-plus me-2"></i>เพิ่มผู้ใช้งานใหม่
         </a>
-    </div>
+        <?php endif; ?>
+        </div>
 
     <div class="table-responsive rounded-4 shadow-sm border">
         <table class="table table-hover mb-0 align-middle">
