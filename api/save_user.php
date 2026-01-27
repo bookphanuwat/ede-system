@@ -87,10 +87,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 exit;
             }
 
-            if (empty($password)) {
-                echo "<script>alert('❌ กรุณากำหนดรหัสผ่าน'); window.history.back();</script>";
-                exit;
+            // ตรวจสอบรหัสผ่าน (ถ้ามีการกรอกเข้ามา)
+            if (!empty($password)) {
+            if (strlen($password) < 12) {
+            echo "<script>alert('❌ รหัสผ่านต้องมีความยาวอย่างน้อย 12 ตัวอักษร'); window.history.back();</script>";
+            exit;
             }
+            if (!preg_match('/[a-zA-Z]/', $password) || !preg_match('/[0-9]/', $password)) {
+                echo "<script>alert('❌ รหัสผ่านต้องประกอบด้วยตัวอักษรภาษาอังกฤษและตัวเลขผสมกัน'); window.history.back();</script>";
+                exit;
+                    }
+                }
+
+            try {
+                if ($user_id) {
 
             $password_hash = password_hash($password, PASSWORD_DEFAULT);
             $stmt = $pdo->prepare("INSERT INTO users (username, password_hash, fullname, department, role_id) VALUES (?, ?, ?, ?, ?)");

@@ -18,19 +18,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $password = $_POST['password'];
     $confirm_password = $_POST['confirm_password'];
 
-    // Security: ป้องกัน Path Traversal (ห้ามมี .. ในข้อมูล)
-    if (strpos($fullname, '..') !== false || strpos($department, '..') !== false) {
-        echo "<script>alert('❌ ข้อมูลไม่ถูกต้อง (ห้ามมี ..)'); window.history.back();</script>";
+  // [เพิ่มใหม่] Validation: ตรวจสอบความปลอดภัยรหัสผ่าน
+    // 1. ตรวจสอบความยาว (ขั้นต่ำ 12 ตัว)
+    if (strlen($password) < 12) {
+        echo "<script>alert('❌ รหัสผ่านต้องมีความยาวอย่างน้อย 12 ตัวอักษร'); window.history.back();</script>";
+        exit;
+    }
+    // 2. ตรวจสอบว่ามีทั้งตัวเลขและตัวอักษร
+    if (!preg_match('/[a-zA-Z]/', $password) || !preg_match('/[0-9]/', $password)) {
+        echo "<script>alert('❌ รหัสผ่านต้องประกอบด้วยตัวอักษรภาษาอังกฤษและตัวเลขผสมกัน'); window.history.back();</script>";
         exit;
     }
 
-    // Validation: ตรวจสอบ Username (อนุญาตเฉพาะ A-Z, a-z, 0-9 และ _)
-    if (!preg_match('/^[a-zA-Z0-9_]+$/', $username)) {
-        echo "<script>alert('❌ Username ต้องประกอบด้วยตัวอักษรภาษาอังกฤษ ตัวเลข หรือ _ เท่านั้น'); window.history.back();</script>";
-        exit;
-    }
-
-    // 1. ตรวจสอบรหัสผ่านตรงกันไหม
+    // 1. ตรวจสอบรหัสผ่านตรงกันไหม (โค้ดเดิม)
     if ($password !== $confirm_password) {
         echo "<script>alert('❌ รหัสผ่านไม่ตรงกัน'); window.history.back();</script>";
         exit;

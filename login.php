@@ -80,8 +80,16 @@ if (empty($_SESSION['csrf_token'])) {
                 <input type="text" name="fullname" class="form-control" placeholder="ชื่อ-นามสกุล" required>
                 <input type="text" name="department" class="form-control" placeholder="แผนก/หน่วยงาน" required>
                 <input type="text" name="username" class="form-control" placeholder="กำหนดชื่อผู้ใช้งาน (Username)" required>
-                <input type="password" name="password" class="form-control" placeholder="กำหนดรหัสผ่าน" required>
-                <input type="password" name="confirm_password" class="form-control" placeholder="ยืนยันรหัสผ่าน" required>
+                <div class="mb-3 text-start">
+                <input type="password" name="password" class="form-control mb-1" placeholder="กำหนดรหัสผ่าน" minlength="12" required>
+                <small class="text-danger fw-bold" style="font-size: 0.85rem;">
+                    * รหัสผ่านต้องมีขั้นต่ำ 12 ตัว (มีตัวเลขและตัวอักษรผสมกัน)
+                </small>
+                 </div>
+
+<div class="mb-3">
+    <input type="password" name="confirm_password" class="form-control" placeholder="ยืนยันรหัสผ่านอีกครั้ง" minlength="12" required>
+</div>
 
                 <button type="submit" class="btn btn-action btn-register shadow-sm mb-3">
                     ลงทะเบียน <i class="fas fa-user-plus ms-2"></i>
