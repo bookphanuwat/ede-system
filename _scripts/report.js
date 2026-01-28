@@ -1,9 +1,11 @@
 /**
  * Report Page Script
- * Handle date filtering, API fetching, and table rendering
+ * Handle date filtering, API fetching, table rendering, and department filtering
+ * Updated: Highlight active date filter button
  */
 
 const API_BASE = '../api/index.php';
+let RAW_REPORT_DATA = []; // ✅ ตัวแปร Global เก็บข้อมูลดิบทั้งหมด
 
 document.addEventListener('DOMContentLoaded', () => {
     // 1. ป้องกัน Form Submit
@@ -18,6 +20,8 @@ document.addEventListener('DOMContentLoaded', () => {
         btn.addEventListener('click', function() {
             const filterType = this.getAttribute('data-filter');
             setDateFilter(filterType);
+            // ✅ อัปเดตสีปุ่มเมื่อกด
+            updateActiveButton(filterType);
         });
     });
 
@@ -27,7 +31,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const btnReset = document.getElementById('btnReset');
     if(btnReset) btnReset.addEventListener('click', () => {
-        setDateFilter('month');
+        // ✅ รีเซ็ตเป็น "ทั้งหมด"
+        setDateFilter('all'); 
+        updateActiveButton('all'); // อัปเดตสีปุ่มกลับเป็น All
+        
+        // Reset Dropdown แผนกด้วย
+        const deptSelect = document.getElementById('deptFilter');
+        if(deptSelect) deptSelect.value = 'all';
     });
 
     // 4. ปุ่มพิมพ์ และ Export
@@ -35,11 +45,46 @@ document.addEventListener('DOMContentLoaded', () => {
     if(btnPrint) btnPrint.addEventListener('click', () => window.print());
 
     const btnExport = document.getElementById('btnExport');
-    if(btnExport) btnExport.addEventListener('click', () => exportTableToExcel('reportTable', 'Report_Document_Grouped'));
+    if(btnExport) {
+        btnExport.addEventListener('click', () => {
+            // ตั้งชื่อไฟล์ตามแผนกที่เลือก
+            const deptSelect = document.getElementById('deptFilter');
+            const deptName = (deptSelect && deptSelect.value !== 'all') ? `_${deptSelect.value}` : '_All';
+            exportTableToExcel('reportTable', `Report_Document${deptName}`);
+        });
+    }
 
-    // โหลดข้อมูลครั้งแรก
-    loadReport();
+    // 5. Event Listener สำหรับ Dropdown เลือกแผนก
+    const deptSelect = document.getElementById('deptFilter');
+    if (deptSelect) {
+        deptSelect.addEventListener('change', filterAndRender);
+    }
+
+    // ✅✅✅ โหลดข้อมูลครั้งแรก ให้เป็น 'all' ทันที พร้อมไฮไลท์ปุ่ม
+    setDateFilter('all');
+    updateActiveButton('all');
 });
+
+// ✅ ฟังก์ชันเปลี่ยนสีปุ่มที่เลือก (Highlight Active Button)
+function updateActiveButton(activeType) {
+    const btns = document.querySelectorAll('.js-date-filter');
+    
+    btns.forEach(btn => {
+        const btnType = btn.getAttribute('data-filter');
+        
+        if (btnType === activeType) {
+            // ถ้าเป็นปุ่มที่เลือก: เปลี่ยนเป็นสีทึบ (ลบ outline)
+            btn.classList.remove('btn-outline-secondary');
+            btn.classList.add('btn-secondary');
+            btn.classList.add('fw-bold'); // เพิ่มตัวหนาให้ชัดขึ้น
+        } else {
+            // ถ้าไม่ใช่: กลับเป็นแบบโปร่ง (ใส่ outline)
+            btn.classList.remove('btn-secondary');
+            btn.classList.remove('fw-bold');
+            btn.classList.add('btn-outline-secondary');
+        }
+    });
+}
 
 function setDateFilter(type) {
     const today = new Date();
@@ -75,7 +120,7 @@ function formatDateToISO(date) {
     if (!date) return '';
     const d = new Date(date);
     let year = d.getFullYear();
-    // แก้ไขปี พ.ศ.
+    // แก้ไขปี พ.ศ. (ถ้ามี)
     if (year > 2400) year = year - 543;
     let month = String(d.getMonth() + 1).padStart(2, '0');
     let day = String(d.getDate()).padStart(2, '0');
@@ -93,6 +138,7 @@ function loadReport() {
     const tbody = document.getElementById('reportTableBody');
     const countSpan = document.getElementById('totalCount');
 
+    // Reset Table
     if(tbody) tbody.innerHTML = '<tr><td colspan="6" class="py-5 text-center"><i class="fas fa-spinner fa-spin fa-2x text-secondary"></i><br>กำลังประมวลผล...</td></tr>';
     if(countSpan) countSpan.innerText = '0';
 
@@ -100,9 +146,16 @@ function loadReport() {
         .then(res => res.json())
         .then(res => {
             if (res.status === 'success' && res.data.length > 0) {
-                renderTable(res.data);
-                if(countSpan) countSpan.innerText = numberFormat(res.total_count);
+                // เก็บข้อมูลลงตัวแปร Global
+                RAW_REPORT_DATA = res.data; 
+
+                // สร้างตัวเลือกใน Dropdown แผนก
+                populateDeptOptions(RAW_REPORT_DATA);
+
+                // แสดงผล
+                filterAndRender();
             } else {
+                RAW_REPORT_DATA = [];
                 if(tbody) tbody.innerHTML = '<tr><td colspan="6" class="py-5 text-center text-muted">ไม่พบข้อมูลในช่วงเวลาที่เลือก</td></tr>';
                 if(countSpan) countSpan.innerText = '0';
             }
@@ -113,9 +166,55 @@ function loadReport() {
         });
 }
 
+// ฟังก์ชันสร้างตัวเลือกแผนก (Dropdown)
+function populateDeptOptions(data) {
+    const select = document.getElementById('deptFilter');
+    if (!select) return;
+
+    const currentValue = select.value;
+
+    const departments = [...new Set(data.map(item => item.sender_dept || 'ไม่ระบุแผนก'))].sort();
+
+    let html = '<option value="all">-- ทุกแผนก --</option>';
+    departments.forEach(dept => {
+        html += `<option value="${dept}">${dept}</option>`;
+    });
+
+    select.innerHTML = html;
+    
+    if (departments.includes(currentValue) || currentValue === 'all') {
+        select.value = currentValue;
+    }
+}
+
+// ฟังก์ชันกรองข้อมูลและวาดตาราง
+function filterAndRender() {
+    const select = document.getElementById('deptFilter');
+    const filterValue = select ? select.value : 'all';
+    const countSpan = document.getElementById('totalCount');
+
+    let filteredData = RAW_REPORT_DATA;
+
+    if (filterValue !== 'all') {
+        filteredData = RAW_REPORT_DATA.filter(item => {
+            const deptName = item.sender_dept || 'ไม่ระบุแผนก';
+            return deptName === filterValue;
+        });
+    }
+
+    if(countSpan) countSpan.innerText = numberFormat(filteredData.length);
+
+    renderTable(filteredData);
+}
+
 function renderTable(data) {
     const tbody = document.getElementById('reportTableBody');
     if(!tbody) return;
+
+    if (data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="py-5 text-center text-muted">ไม่พบข้อมูลที่ตรงกับเงื่อนไข</td></tr>';
+        return;
+    }
 
     let html = '';
     let currentDept = null;
@@ -177,8 +276,8 @@ function exportTableToExcel(tableID, filename = '') {
     const rows = tbody ? tbody.rows : table.rows;
     
     for (let i = 0; i < rows.length; i++) {
-            const isHeaderRow = rows[i].cells.length === 1;
-            const bgStyle = isHeaderRow ? "style='background-color: #cce5ff; font-weight: bold;'" : "";
+            const isGroupHeader = rows[i].cells.length === 1;
+            const bgStyle = isGroupHeader ? "style='background-color: #cce5ff; font-weight: bold;'" : "";
             
             html += `<tr ${bgStyle}>`;
             for (let cell of rows[i].cells) {

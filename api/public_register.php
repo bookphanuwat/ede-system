@@ -15,7 +15,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $fullname = trim(strip_tags($_POST['fullname'] ?? ''));
     $department = trim(strip_tags($_POST['department'] ?? ''));
     $username = trim(strip_tags($_POST['username'] ?? ''));
-    $password = $_POST['password'];
+    $$password = $_POST['password'] ?? ''; 
     $confirm_password = $_POST['confirm_password'];
 
   // [เพิ่มใหม่] Validation: ตรวจสอบความปลอดภัยรหัสผ่าน

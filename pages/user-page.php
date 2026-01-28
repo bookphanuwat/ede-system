@@ -1,226 +1,171 @@
-<?php 
-// CSRF Protection: สร้าง Token ถ้ายังไม่มี
-if (empty($_SESSION['csrf_token'])) {
-    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+<?php
+// 1. เช็ค Session และตั้งค่าพื้นฐาน
+if (session_status() === PHP_SESSION_NONE) {
+    ini_set('session.cookie_httponly', 1);
+    ini_set('session.cookie_secure', 1);
+    session_start();
 }
 
-// ตัวแปรสำหรับแจ้งเตือน (Bootstrap Alert)
-$alert_message = '';
-$alert_type = '';
-
-// ✅ FIX 2: เพิ่มการตรวจสอบสิทธิ์ Admin ก่อนเริ่มทำงาน
-if (empty($_SESSION['user_id']) || empty($_SESSION['role']) || $_SESSION['role'] !== 'Administrator') {
-    die("❌ Access Denied: คุณไม่มีสิทธิ์จัดการข้อมูลผู้ใช้งาน");
+// 2. โหลด Config และ Database (ใช้ require_once เพื่อป้องกัน Error)
+if (!defined('SITE_URL')) {
+    // ปรับ Path ให้ถอยหลังกลับไปหาไฟล์ config ให้ถูกต้อง
+    require_once __DIR__ . '/../../dv-config.php'; 
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // CSRF Protection
-    if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
-        die("Error: Invalid CSRF Token");
+if (defined('DEV_PATH')) {
+    // ใช้ realpath เพื่อตรวจสอบ Path ที่แท้จริง และป้องกันการ Error จากการใช้ ../ ผิดพลาด
+    $class_path = realpath(__DIR__ . '/../../classes/db.class.v2.php');
+    $func_path  = realpath(__DIR__ . '/../../functions/global.php');
+
+    if ($class_path && file_exists($class_path)) {
+        require_once $class_path;
+    } else {
+        die("Error: ไม่พบไฟล์ Database Class ที่ตำแหน่ง: " . __DIR__ . '/../../classes/db.class.v2.php');
     }
 
-    // ✅ FIX 1: Type Casting (บังคับเป็นตัวเลข)
-    $user_id = isset($_POST['user_id']) && $_POST['user_id'] !== '' ? (int)$_POST['user_id'] : null;
-    
-    // Helper Function: ทำความสะอาดข้อมูลและป้องกัน Path Traversal
-    function sanitizeInput($data) {
-        // 1. ลบ Null Bytes (%00) ที่อาจใช้หลบเลี่ยงการตรวจสอบนามสกุลไฟล์
-        $data = str_replace(chr(0), '', $data);
-        // 2. ลบ HTML Tags และช่องว่างหัวท้าย
-        $data = trim(strip_tags($data ?? ''));
-        return $data;
+    if ($func_path && file_exists($func_path)) {
+        require_once $func_path;
     }
+}
 
-    // รับค่าและ Sanitize
-    $username   = sanitizeInput($_POST['username']);
-    $fullname   = sanitizeInput($_POST['fullname']);
-    $department = sanitizeInput($_POST['department']);
+// 4. ตรวจสอบสิทธิ์ (Admin เท่านั้นถึงจะแก้คนอื่นได้)
+$is_admin = (isset($_SESSION['role']) && $_SESSION['role'] === 'Administrator');
+$current_user_id = $_SESSION['user_id'] ?? 0;
 
-    // ✅ FIX 2: Security check for Path Traversal (High Severity Fix)
-    // ตรวจสอบว่ามีอักขระอันตรายที่ใช้ระบุ Path หรือไม่ (.. หรือ / หรือ \)
-    // การใช้ preg_match จะครอบคลุมกว่า strpos และป้องกันการอ้างอิง directory
-    if (preg_match('/(\.\.|[\/\\\\])/', $fullname) || preg_match('/(\.\.|[\/\\\\])/', $department)) {
-        // บันทึก Log เพื่อติดตามผู้พยายามโจมตี (Optional)
-        error_log("Security Warning: Path Traversal attempt detected from IP " . $_SERVER['REMOTE_ADDR']);
-        
-        echo "<script>
-            alert('❌ ข้อมูลไม่ถูกต้อง: ห้ามใช้อักขระพิเศษที่เกี่ยวข้องกับ Path (เช่น / หรือ \\ )'); 
-            window.history.back();
-        </script>";
-        exit;
-    }
-
-    $password = $_POST['password'] ?? '';
-    
-    // ✅ FIX 3: Type Casting role_id
-    $role_id = isset($_POST['role_id']) ? (int)$_POST['role_id'] : 0;
-
-    if (empty($role_id)) {
-        echo "<script>alert('❌ กรุณาเลือกสิทธิ์การใช้งาน (Role)'); window.history.back();</script>";
-        exit;
-    }
-
-    try {
-        if ($user_id) {
-            // --- กรณีแก้ไข (Update) ---
-            if (!empty($password)) {
-                $password_hash = password_hash($password, PASSWORD_DEFAULT);
-                $sql = "UPDATE users SET fullname=?, department=?, role_id=?, password_hash=? WHERE user_id=?";
-                CON::updateDB([$fullname, $department, $role_id, $password_hash, $user_id], $sql);
-            } else {
-                $sql = "UPDATE users SET fullname=?, department=?, role_id=? WHERE user_id=?";
-                CON::updateDB([$fullname, $department, $role_id, $user_id], $sql);
-            }
-            
-            header("Location: settings/?status=success&msg=" . urlencode('แก้ไขข้อมูลเรียบร้อย'));
-            exit;
-        } else {
-            // --- กรณีเพิ่มใหม่ (Insert) ---
-            
-            // Validation Username (Allow List: A-Z, 0-9, _)
-            if (!preg_match('/^[a-zA-Z0-9_]+$/', $username)) {
-                echo "<script>alert('❌ Username ไม่ถูกต้อง (A-Z, 0-9, _)'); window.history.back();</script>";
-                exit;
-            }
-
-            $sqlCheck = "SELECT COUNT(*) as c FROM users WHERE username = ?";
-            $resCheck = CON::selectArrayDB([$username], $sqlCheck);
-            if ($resCheck && $resCheck[0]['c'] > 0) {
-                echo "<script>alert('❌ Username นี้มีอยู่ในระบบแล้ว'); window.history.back();</script>";
-                exit;
-            }
-
-            if (empty($password)) {
-                echo "<script>alert('❌ กรุณากำหนดรหัสผ่าน'); window.history.back();</script>";
-                exit;
-            }
-
-            $password_hash = password_hash($password, PASSWORD_DEFAULT);
-            $sql = "INSERT INTO users (username, password_hash, fullname, department, role_id) VALUES (?, ?, ?, ?, ?)";
-            CON::updateDB([$username, $password_hash, $fullname, $department, $role_id], $sql);
-
-            header("Location: settings/?status=success&msg=" . urlencode('เพิ่มผู้ใช้งานเรียบร้อย'));
-            exit;
-        }
-
-    } catch (Exception $e) {
-        // ไม่แสดง Error จริงหน้าเว็บ
-        error_log("Database Error in user-page.php: " . $e->getMessage());
-        echo "<script>alert('❌ เกิดข้อผิดพลาดทางฐานข้อมูล กรุณาติดต่อผู้ดูแลระบบ'); window.history.back();</script>";
-    }
-} 
-
-// เตรียมตัวแปร
 $user_data = null;
 $is_edit = false;
 $roles = [];
+$target_id = null;
 
-// 1. ดึงรายการสิทธิ์ (Roles) ทั้งหมดจากฐานข้อมูล มาใส่ Dropdown
-$sql_roles = "SELECT * FROM roles ORDER BY role_id ASC";
-$roles = CON::selectArrayDB([], $sql_roles) ?? [];
+// กำหนด ID ที่จะจัดการ
+if ($is_admin) {
+    $target_id = $_GET['id'] ?? null;
+} else {
+    $target_id = $current_user_id; // User ทั่วไปแก้ได้เฉพาะตัวเอง
+}
 
-// 2. ถ้ามี ID ส่งมา ให้ดึงข้อมูลผู้ใช้นั้นมาแสดง (โหมดแก้ไข)
-if (isset($_GET['id'])) {
-    $id = $_GET['id'];
-    $sql_user = "SELECT * FROM users WHERE user_id = ?";
-    $user_result = CON::selectArrayDB([$id], $sql_user);
-    
+// ดึงข้อมูล Roles (สำหรับ Admin เลือกสิทธิ์)
+if ($is_admin && class_exists('CON')) {
+    $roles = CON::selectArrayDB([], "SELECT * FROM roles ORDER BY role_id ASC") ?? [];
+}
+
+// ดึงข้อมูลผู้ใช้กรณีแก้ไข
+if ($target_id && class_exists('CON')) {
+    $user_result = CON::selectArrayDB([$target_id], "SELECT u.*, r.role_name FROM users u LEFT JOIN roles r ON u.role_id = r.role_id WHERE u.user_id = ?");
     if (!empty($user_result)) {
         $user_data = $user_result[0];
         $is_edit = true;
     }
 }
+
+$page_header = $is_edit ? "แก้ไขข้อมูลผู้ใช้งาน" : "เพิ่มผู้ใช้งานใหม่";
 ?>
 
-        <!-- เรียกใช้ Header กลาง -->
-        <?php 
-            $page_title = $is_edit ? "แก้ไขผู้ใช้งาน" : "เพิ่มผู้ใช้งานใหม่"; 
-            $header_class = "header-settings"; 
-            include 'includes/topbar.php'; 
-        ?>
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?php echo $page_header; ?></title>
+    
+    <link rel="stylesheet" href="<?php echo ASSET_PATH; ?>/bootstrap/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="<?php echo ASSET_PATH; ?>/@fortawesome/fontawesome-free/css/all.css">
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600&display=swap" rel="stylesheet">
+    
+    <style>
+        body { font-family: 'Sarabun', sans-serif; background-color: #f4f7f6; }
+        .main-card { border: none; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); }
+        .custom-input { border-radius: 10px; padding: 12px; border: 1px solid #e0e0e0; background-color: #fdfdfd; }
+        .custom-input:focus { box-shadow: 0 0 0 0.25 row rgba(0, 230, 118, 0.2); border-color: #00E676; }
+        .header-section { background: #6f42c1; color: white; padding: 20px; border-radius: 15px 15px 0 0; }
+    </style>
+</head>
+<body>
 
-        <div class="page-content">
-            <h5 class="mb-5 fw-bold text-secondary">**จัดการข้อมูลผู้ใช้งาน**</h5>
+<div class="container py-5">
+    <div class="card main-card mx-auto" style="max-width: 850px;">
+        <div class="header-section shadow-sm">
+            <h4 class="mb-0 fw-bold"><i class="fas fa-user-circle me-2"></i> <?php echo $page_header; ?></h4>
+        </div>
+        
+        <div class="card-body p-4 p-md-5">
+            
+            <?php if (isset($_GET['status'])): ?>
+                <div class="alert alert-<?php echo $_GET['status'] == 'success' ? 'success' : 'danger'; ?> alert-dismissible fade show mb-4">
+                    <i class="fas <?php echo $_GET['status'] == 'success' ? 'fa-check-circle' : 'fa-exclamation-triangle'; ?> me-2"></i>
+                    <?php echo htmlspecialchars($_GET['msg']); ?>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            <?php endif; ?>
 
-            <form action="" method="POST" class="mx-auto" style="max-width: 800px;">
-                <!-- ถ้าแก้ไข ต้องส่ง ID ไปด้วย -->
+            <form action="../api/save_user.php" method="POST"> <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
                 <?php if ($is_edit): ?>
                     <input type="hidden" name="user_id" value="<?php echo $user_data['user_id']; ?>">
                 <?php endif; ?>
 
-                <!-- CSRF Token Field -->
-                <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
-
-                <!-- 1. Username (ห้ามแก้ถ้ามีอยู่แล้ว) -->
-                <div class="row mb-4 align-items-center">
-                    <div class="col-md-3 text-md-end"><label class="fw-bold text-secondary">Username</label></div>
+                <div class="row mb-4">
+                    <label class="col-md-3 col-form-label fw-bold text-secondary text-md-end">Username</label>
                     <div class="col-md-9">
-                        <input type="text" name="username" class="form-control custom-input" 
-                               value="<?php echo $user_data ? htmlspecialchars($user_data['username']) : ''; ?>" 
-                               <?php echo $is_edit ? 'readonly style="background-color: #e9ecef !important;"' : 'required'; ?>>
-                        <?php if($is_edit): ?>
-                            <small class="text-muted ms-3">*Username ไม่สามารถแก้ไขได้</small>
-                        <?php endif; ?>
+                        <input type="text" name="username" class="form-control custom-input"
+                               value="<?php echo $user_data ? htmlspecialchars($user_data['username']) : ''; ?>"
+                               <?php echo $is_edit ? 'readonly style="background-color: #f8f9fa;"' : 'required'; ?>>
+                        <?php if($is_edit): ?><small class="text-muted">*Username แก้ไขไม่ได้</small><?php endif; ?>
                     </div>
                 </div>
 
-                <!-- 2. Password (เว้นว่างได้ถ้าแก้ไข) -->
-                <div class="row mb-4 align-items-center">
-                    <div class="col-md-3 text-md-end"><label class="fw-bold text-secondary">Password</label></div>
+                <div class="row mb-4">
+                    <label class="col-md-3 col-form-label fw-bold text-secondary text-md-end">Password</label>
                     <div class="col-md-9">
                         <input type="password" name="password" class="form-control custom-input" 
-                               placeholder="<?php echo $is_edit ? 'กรอกเฉพาะเมื่อต้องการเปลี่ยนรหัสผ่านใหม่' : 'กำหนดรหัสผ่าน...'; ?>"
-                               <?php echo $is_edit ? '' : 'required'; ?>>
+                               placeholder="<?php echo $is_edit ? 'กรอกเฉพาะเมื่อต้องการเปลี่ยนใหม่' : 'ระบุรหัสผ่าน (12 ตัวขึ้นไป)'; ?>"
+                               minlength="12" <?php echo $is_edit ? '' : 'required'; ?>>
                     </div>
                 </div>
 
-                <!-- 3. ชื่อ-สกุล -->
-                <div class="row mb-4 align-items-center">
-                    <div class="col-md-3 text-md-end"><label class="fw-bold text-secondary">ชื่อ-สกุล</label></div>
+                <div class="row mb-4">
+                    <label class="col-md-3 col-form-label fw-bold text-secondary text-md-end">ชื่อ-สกุล</label>
                     <div class="col-md-9">
-                        <input type="text" name="fullname" class="form-control custom-input" 
+                        <input type="text" name="fullname" class="form-control custom-input"
                                value="<?php echo $user_data ? htmlspecialchars($user_data['fullname']) : ''; ?>" required>
                     </div>
                 </div>
 
-                <!-- 4. แผนก -->
-                <div class="row mb-4 align-items-center">
-                    <div class="col-md-3 text-md-end"><label class="fw-bold text-secondary">แผนก/ฝ่าย</label></div>
+                <div class="row mb-4">
+                    <label class="col-md-3 col-form-label fw-bold text-secondary text-md-end">แผนก</label>
                     <div class="col-md-9">
-                        <input type="text" name="department" class="form-control custom-input" 
+                        <input type="text" name="department" class="form-control custom-input"
                                value="<?php echo $user_data ? htmlspecialchars($user_data['department'] ?? '') : ''; ?>">
                     </div>
                 </div>
 
-                <!-- 5. สิทธิ์การใช้งาน (Dropdown จาก DB) -->
-                <div class="row mb-4 align-items-center">
-                    <div class="col-md-3 text-md-end"><label class="fw-bold text-secondary">สิทธิ์การใช้งาน</label></div>
+                <div class="row mb-4">
+                    <label class="col-md-3 col-form-label fw-bold text-secondary text-md-end">สิทธิ์การใช้งาน</label>
                     <div class="col-md-9">
-                        <select name="role_id" class="form-select custom-input">
-                            <?php if (!empty($roles)): ?>
+                        <?php if ($is_admin): ?>
+                            <select name="role_id" class="form-select custom-input">
                                 <?php foreach ($roles as $role): ?>
-                                    <option value="<?php echo $role['role_id']; ?>" 
-                                        <?php echo ($user_data && $user_data['role_id'] == $role['role_id']) ? 'selected' : ''; ?>>
+                                    <option value="<?php echo $role['role_id']; ?>" <?php echo ($user_data && $user_data['role_id'] == $role['role_id']) ? 'selected' : ''; ?>>
                                         <?php echo htmlspecialchars($role['role_name']); ?>
                                     </option>
                                 <?php endforeach; ?>
-                            <?php else: ?>
-                                <!-- Fallback กรณีดึง DB ไม่ได้ -->
-                                <option value="2">User</option>
-                                <option value="1">Admin</option>
-                            <?php endif; ?>
-                        </select>
+                            </select>
+                        <?php else: ?>
+                            <input type="text" class="form-control-plaintext px-3 border rounded bg-light" value="<?php echo htmlspecialchars($user_data['role_name'] ?? 'User'); ?>" readonly>
+                        <?php endif; ?>
                     </div>
                 </div>
 
-                <!-- ปุ่มกด -->
                 <div class="d-flex justify-content-end mt-5 pt-3 border-top">
-                    <a href="settings/" class="btn btn-danger rounded-pill px-4 me-2 shadow-sm text-decoration-none">
-                        <i class="fas fa-times me-2"></i>ยกเลิก
-                    </a>
+                    <a href="javascript:history.back()" class="btn btn-light rounded-pill px-4 me-2 border">ยกเลิก</a>
                     <button type="submit" class="btn btn-success rounded-pill px-5 shadow-sm" style="background-color: #00E676; border:none; color: #000; font-weight:600;">
-                        <i class="fas fa-save me-2"></i><?php echo $is_edit ? 'บันทึกการแก้ไข' : 'บันทึกข้อมูล'; ?>
+                        <i class="fas fa-save me-2"></i>บันทึกข้อมูล
                     </button>
                 </div>
             </form>
         </div>
+    </div>
+</div>
+
+<script src="<?php echo ASSET_PATH; ?>/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

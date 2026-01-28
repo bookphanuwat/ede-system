@@ -34,6 +34,15 @@
                 <button type="button" id="btnReset" class="btn btn-secondary rounded-circle shadow-sm" style="width: 40px; height: 40px;" title="รีเซ็ตค่าเริ่มต้น">
                     <i class="fas fa-sync-alt"></i>
                 </button>
+                </button>
+
+                <?php if($is_admin): ?>
+                    <div class="ms-2 border-start ps-2">
+                        <select id="deptFilter" class="form-select rounded-pill custom-input shadow-sm text-secondary" style="min-width: 180px;">
+                            <option value="all" selected>-- ทุกแผนก --</option>
+                            </select>
+                    </div>
+                <?php endif; ?>
             </div>
         </div>
     </form>

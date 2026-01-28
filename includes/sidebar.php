@@ -41,4 +41,5 @@
     <a href="<?php echo SITE_URL; ?>/workflow-settings/" class="nav-btn btn-status_settings">
         <i class="fas fa-project-diagram"></i> จัดการ สถานะ
     </a>
+</li>
 </div>

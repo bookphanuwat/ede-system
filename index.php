@@ -133,6 +133,7 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
                         $pageFile = 'pages/liff-scan.php';
                         $jsReq = 'js/liffscan.min.js';
                         break;
+                    
                     case 'user':
                         $pageFile = 'pages/user-page.php';
                         break;
