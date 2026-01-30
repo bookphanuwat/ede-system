@@ -1,5 +1,10 @@
 <?php
+ini_set('session.cookie_httponly', 1);
+ini_set('session.cookie_secure', 1);
 session_start();
+// ปิดการแสดง error ผ่าน API response
+ini_set('display_errors', 0);
+ini_set('display_startup_errors', 0);
 error_reporting( E_ALL ^ E_NOTICE );
 mb_internal_encoding( 'UTF-8' );
 
@@ -7,8 +12,8 @@ mb_internal_encoding( 'UTF-8' );
 header( 'Content-Type: application/json; charset=utf-8' );
 
 // Setting up some server access controls to allow people to get information
-header( "Access-Control-Allow-Origin: *" );
-header( 'Access-Control-Allow-Methods:  POST, GET' );
+header( "Access-Control-Allow-Origin: https://athweb.xyz" );
+//header( 'Access-Control-Allow-Methods:  POST, GET' );
 
 /**
  * ============================================================================
@@ -27,7 +32,7 @@ header( 'Access-Control-Allow-Methods:  POST, GET' );
  * ============================================================================
  * 1. Router Pattern: ใช้ Query Parameter 'dev' เพื่อระบุ action ที่ต้องการ
  *    - getdocinfo     : ดึงข้อมูลเอกสาร พร้อมประวัติสถานะ
- *    - get_statuses   : ดึงรายการสถานะจากไฟล์ workflow_data.json
+ *    - get-statuses   : ดึงรายการสถานะจากไฟล์ workflow_data.json
  *    - search         : ค้นหาเอกสารตามคำค้นหา
  *    - history        : ดึงข้อมูลประวัติการทำงาน
  *    - manage-workflow: จัดการสถานะและหมวดหมู่เอกสาร
@@ -57,7 +62,7 @@ header( 'Access-Control-Allow-Methods:  POST, GET' );
  * - keyword (สำหรับ search):
  *   คำค้นหาในฐานข้อมูล (string)
  *
- * - creator_id (สำหรับ get_statuses):
+ * - creator_id (สำหรับ get-statuses):
  *   ID ของผู้สร้าง workflow (int) - ใช้กรองสถานะตามเจ้าของ
  *
  * - line_id (สำหรับ history):
@@ -164,7 +169,7 @@ header( 'Access-Control-Allow-Methods:  POST, GET' );
  *    GET /api/search/?keyword=ใบส่งสินค้า
  *
  * 4. ดึงรายการสถานะ (Pattern: /dev?creator_id=...):
- *    GET /api/get_statuses/?creator_id=5
+ *    GET /api/get-statuses/?creator_id=5
  *
  * 5. จัดการ Workflow (Pattern: /dev):
  *    POST /api/manage-workflow/
@@ -188,7 +193,7 @@ require DEV_PATH . '/classes/db.class.v2.php';
 require DEV_PATH . '/functions/global.php';
 
 // สำหรับ dev parameter (อนุญาตเฉพาะ alphanumeric)
-$GET_DEV = sanitizeGetParam( 'dev', 'alphanumeric', '', 50 );
+$GET_DEV = sanitizeGetParam( 'dev', 'string', '', 50 );
 
 $json_data['data'] = [];
 
@@ -198,7 +203,6 @@ switch ( $GET_DEV ) {
         $doc_code = sanitizeGetParam( 'code', 'alphanumeric', '' );
         $action   = sanitizeGetParam( 'action', 'alphanumeric', '' );
 
-
         if ( empty( $doc_code ) ) {
             http_response_code( 400 );
             $json_data['status']  = 'error';
@@ -206,13 +210,7 @@ switch ( $GET_DEV ) {
             break;
         }
 
-        // เช็คว่า action = scan ถึงจะบวกยอด
-        if ( $action === 'scan' ) {
-            $stmtCount = "UPDATE documents SET view_count = view_count + 1 WHERE document_code = ?";
-            CON::updateDB( [$doc_code], $stmtCount );
-        }
-
-        // ดึงข้อมูลเอกสาร
+        // 1. ดึงข้อมูลเอกสาร
         $docSql = "SELECT d.*, dt.type_name
                    FROM documents d
                    LEFT JOIN document_type dt ON d.type_id = dt.type_id
@@ -228,7 +226,32 @@ switch ( $GET_DEV ) {
 
         $doc = $docResult[0];
 
-        // ดึงประวัติ (Timeline)
+        // 2. ถ้าเป็นการ Scan ให้บันทึก Log และบวกยอดวิว
+        if ( $action === 'scan' ) {
+            // 2.1 บวกยอดวิว
+            $stmtCount = "UPDATE documents SET view_count = view_count + 1 WHERE document_code = ?";
+            CON::updateDB( [$doc_code], $stmtCount );
+
+            // 2.2 --- เพิ่มใหม่: บันทึก Log ว่า "เปิดดู" ---
+            $viewer_line_id = isset($_GET['line_id']) ? htmlspecialchars($_GET['line_id'], ENT_QUOTES, 'UTF-8') : '';
+            $viewer_name    = isset($_GET['name']) ? htmlspecialchars($_GET['name'], ENT_QUOTES, 'UTF-8') : 'Guest';
+            $viewer_pic     = isset($_GET['pic']) ? htmlspecialchars($_GET['pic'], ENT_QUOTES, 'UTF-8') : ''; // รับ URL รูป
+            $ip_address     = $_SERVER['REMOTE_ADDR'] ?? '';
+            $device_info    = 'Scan (View)';
+
+            // บันทึกสถานะ "เปิดอ่าน" หรือ "Viewed"
+            $logSql = "INSERT INTO document_status_log 
+                       (document_id, status, line_user_id_action, ip_address, device_info, actor_name_snapshot, actor_pic_snapshot, location_note) 
+                       VALUES (?, 'เปิดอ่าน', ?, ?, ?, ?, ?, 'สแกน QR Code')";
+            
+            CON::updateDB( 
+                [$doc['document_id'], $viewer_line_id, $ip_address, $device_info, $viewer_name, $viewer_pic], 
+                $logSql 
+            );
+            // ----------------------------------------
+        }
+
+        // 3. ดึงประวัติ (Timeline)
         $logSql = "SELECT l.*, u.fullname, u.username
                    FROM document_status_log l
                    LEFT JOIN users u ON l.action_by = u.user_id
@@ -236,49 +259,88 @@ switch ( $GET_DEV ) {
                    ORDER BY l.action_time DESC";
         $logs = CON::selectArrayDB( [$doc['document_id']], $logSql ) ?? [];
 
+        // =========== กรองสถานะ "เปิดอ่าน" ออก ===========
+        $logs = array_values(array_filter($logs, function($log) {
+            return !in_array($log['status'], ['เปิดอ่าน', 'Viewed']);
+        }));
+        if (!empty($logs)) {
+            $latest_log = $logs[0]; // รายการแรกคือล่าสุด เพราะ ORDER BY DESC
+            
+            // เลือกใช้ชื่อจาก Snapshot (ชื่อใน LIFF) ถ้าไม่มีค่อยใช้ชื่อในระบบ (fullname)
+            $updater_name = !empty($latest_log['actor_name_snapshot']) 
+                            ? $latest_log['actor_name_snapshot'] 
+                            : $latest_log['fullname'];
+
+            if (!empty($updater_name)) {
+                $doc['receiver_name'] = $updater_name;
+            }
+        }
+        // ==========================================================
+
         $json_data['status'] = 'success';
         $json_data['doc']    = $doc;
         $json_data['logs']   = $logs;
         break;
 
-     case 'get_statuses':
-        // 1. รับค่า creator_id ผ่านฟังก์ชัน sanitize (ปลอดภัยกว่า $_GET โดยตรง)
-        // กำหนด default เป็น 0 ถ้าไม่ส่งมา
-        $creator_id = sanitizeGetParam('creator_id', 'int', 0);
+    case 'search':
+        $keyword = sanitizeGetParam( 'keyword', 'string', '' );
+        if ( empty( $keyword ) ) {
+            $json_data['status']  = 'error';
+            $json_data['message'] = 'ระบุคำค้นหา';
+        } else {
+            $keyword_safe = addcslashes($keyword, "%_");
+            $sql = "SELECT d.*, dt.type_name 
+                    FROM documents d
+                    LEFT JOIN document_type dt ON d.type_id = dt.type_id
+                    WHERE d.document_code LIKE ? OR d.title LIKE ?
+                    ORDER BY d.created_at DESC LIMIT 10";
+            
+            $params = ["%$keyword_safe%", "%$keyword_safe%"];
+            $json_data['data']   = CON::selectArrayDB( $params, $sql );
+            $json_data['status'] = 'success';
+        }
+        break;
 
-        // 2. กำหนด Path ไฟล์ JSON
-        // __DIR__ คือโฟลเดอร์ปัจจุบัน (api) ถอยกลับไป 1 ขั้น (..) แล้วเข้า data
-        $jsonFile = __DIR__ . '/../data/workflow_data.json';
+    case 'history':
+        $line_id = sanitizeGetParam( 'line_id', 'string', '' );
+        if ( empty( $line_id ) ) {
+            $json_data['status']  = 'error';
+            $json_data['message'] = 'No Line ID';
+        } else {
+            $sql = "SELECT l.*, d.title, d.document_code 
+                    FROM document_status_log l
+                    JOIN documents d ON l.document_id = d.document_id
+                    WHERE l.line_user_id_action = ?
+                    ORDER BY l.action_time DESC LIMIT 20";
+            $json_data['data']   = CON::selectArrayDB( [$line_id], $sql );
+            $json_data['status'] = 'success';
+        }
+        break;
 
+    case 'get-statuses':
+        $target_id = sanitizeGetParam( 'workflow_id', 'string', '' );
+        $jsonFile = __DIR__ . '/data/workflow_data.json';
         $statuses = [];
 
-        if (file_exists($jsonFile)) {
-            $jsonContent = file_get_contents($jsonFile);
-            $workflows = json_decode($jsonContent, true) ?? [];
-
-            // 3. วนลูปหาหมวดหมู่
-            foreach ($workflows as $wf) {
-                // กรองเฉพาะ Workflow ของ Creator คนนี้ (หรือของคนที่ ID=0/Null ถ้าเป็นระบบกลาง)
-                // หมายเหตุ: ต้องแก้ตรงนี้ให้ยืดหยุ่น ถ้า workflow ไม่ระบุ created_by ให้ถือว่าเป็นของทุกคน
-                $wfCreator = $wf['created_by'] ?? 0;
-
-                if ($wfCreator == $creator_id || $wfCreator == 0) {
-                    // เช็คว่ามี key 'statuses' และเป็น array ไหม กัน error
-                    if (isset($wf['statuses']) && is_array($wf['statuses'])) {
-                        foreach ($wf['statuses'] as $st) {
+        if ( file_exists( $jsonFile ) ) {
+            $workflows = json_decode( file_get_contents( $jsonFile ), true ) ?? [];
+            foreach ( $workflows as $wf ) {
+                if ( isset( $wf['id'] ) && $wf['id'] === $target_id ) {
+                    if ( isset( $wf['statuses'] ) && is_array( $wf['statuses'] ) ) {
+                        foreach ( $wf['statuses'] as $st ) {
                             $statuses[] = [
                                 'status_name' => $st['name'],
                                 'color'       => $st['color'],
-                                'category'    => $wf['name'] // ชื่อหมวดหมู่
+                                'category'    => $wf['name']
                             ];
                         }
                     }
+                    break;
                 }
             }
         }
 
-        // ถ้าไม่มีข้อมูลเลย ให้ใส่ Default
-        if (empty($statuses)) {
+        if ( empty( $statuses ) ) {
             $statuses = [
                 ['status_name' => 'Received', 'category' => 'ค่าเริ่มต้น'],
                 ['status_name' => 'Sent', 'category' => 'ค่าเริ่มต้น'],
@@ -286,54 +348,74 @@ switch ( $GET_DEV ) {
             ];
         }
 
-        // 4. ส่งค่ากลับ
         $json_data['data']   = $statuses;
         $json_data['status'] = 'success';
         break;
 
-    case 'search':
-        // ค้นหาเอกสารจาก keyword
-        $keyword = sanitizeGetParam( 'keyword', 'string', '' );
-        if ( empty( $keyword ) ) {
+    case 'update-status':
+        $inputData = $_POST;
+        $contentType = $_SERVER["CONTENT_TYPE"] ?? '';
+        if (stripos($contentType, 'application/json') !== false) {
+            $inputData = json_decode(file_get_contents('php://input'), true) ?? [];
+        }
+
+        function clean_input($data) {
+            return htmlspecialchars(trim($data ?? ''), ENT_QUOTES, 'UTF-8');
+        }
+
+        $doc_code      = clean_input($inputData['doc_code'] ?? '');
+        $new_status    = clean_input($inputData['status'] ?? 'Received');
+        $next_receiver = clean_input($inputData['receiver_name'] ?? '');
+        $line_user_id  = clean_input($inputData['line_user_id'] ?? ''); 
+        $device_info   = clean_input($inputData['device_info'] ?? 'Unknown');
+        $display_name  = clean_input($inputData['display_name'] ?? 'Unknown User');
+        $picture_url   = clean_input($inputData['picture_url'] ?? ''); 
+
+        $ip_address = $_SERVER['HTTP_CLIENT_IP'] ?? $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? '';
+
+        if ( empty( $doc_code ) ) {
             $json_data['status']  = 'error';
-            $json_data['message'] = 'ระบุคำค้นหา';
+            $json_data['message'] = 'Error: No Code';
         } else {
-            $sql = "SELECT d.*, dt.type_name
-                    FROM documents d
-                    LEFT JOIN document_type dt ON d.type_id = dt.type_id
-                    WHERE d.document_code LIKE ? OR d.title LIKE ?
-                    ORDER BY d.created_at DESC LIMIT 10";
-            $params = ["%{$keyword}%", "%{$keyword}%"];
-            $json_data['data'] = CON::selectArrayDB( $params, $sql );
-            $json_data['status'] = 'success';
+            $sqlDoc = "SELECT document_id FROM documents WHERE document_code = ?";
+            $resDoc = CON::selectArrayDB( [$doc_code], $sqlDoc );
+
+            if ( empty( $resDoc ) ) {
+                $json_data['status']  = 'error';
+                $json_data['message'] = 'ไม่พบเอกสาร';
+            } else {
+                $doc_id = $resDoc[0]['document_id'];
+
+                $updateParams = [$new_status];
+                $updateSql = "UPDATE documents SET current_status = ?";
+                if ( !empty( $next_receiver ) ) {
+                    $updateSql .= ", receiver_name = ?";
+                    $updateParams[] = $next_receiver;
+                }
+                $updateSql .= " WHERE document_id = ?";
+                $updateParams[] = $doc_id;
+                CON::updateDB( $updateParams, $updateSql );
+
+                $action_by = NULL;
+                if ( !empty( $line_user_id ) ) {
+                    $sqlUser = "SELECT user_id FROM users WHERE line_user_id = ?";
+                    $resUser = CON::selectArrayDB( [$line_user_id], $sqlUser );
+                    if ( !empty( $resUser ) ) $action_by = $resUser[0]['user_id'];
+                }
+
+                $log_note = !empty( $next_receiver ) ? "ส่งต่อให้: $next_receiver" : "อัปเดตสถานะ";
+                $sqlLog = "INSERT INTO document_status_log (document_id, status, action_by, line_user_id_action, location_note, ip_address, device_info, actor_name_snapshot, actor_pic_snapshot) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                CON::updateDB( [$doc_id, $new_status, $action_by, $line_user_id, $log_note, $ip_address, $device_info, $display_name, $picture_url], $sqlLog );
+
+                $json_data['status'] = 'success';
+                $json_data['message'] = 'Success';
+            }
         }
         break;
-
-    case 'history':
-        $line_id = sanitizeGetParam('line_id', 'string', '');
-        if (empty($line_id)) {
-            $sql = "SELECT l.*, d.title, d.document_code, u.fullname
-                FROM document_status_log l
-                LEFT JOIN documents d ON l.document_id = d.document_id
-                LEFT JOIN users u ON l.action_by = u.user_id
-                ORDER BY l.action_time DESC LIMIT 50";
-            $json_data['data']   = CON::selectArrayDB( [], $sql );
-        } else {
-            $sql = "SELECT l.*, d.title, d.document_code
-                    FROM document_status_log l
-                    JOIN documents d ON l.document_id = d.document_id
-                    WHERE l.line_user_id_action = ?
-                    ORDER BY l.action_time DESC LIMIT 20";
-            $json_data['data']   = CON::selectArrayDB( [$line_id], $sql );
-        }
-        $json_data['status'] = 'success';
-        break;
-
 
     case 'manage-workflow':
-        $jsonFile = __DIR__ . '/../data/workflow_data.json';
+        $jsonFile = __DIR__ . '/data/workflow_data.json';
 
-        // Helper Closures (ฟังก์ชันช่วยจัดการ JSON)
         $getJson = function() use ($jsonFile) {
             if (!file_exists($jsonFile)) {
                 if (!is_dir(dirname($jsonFile))) mkdir(dirname($jsonFile), 0777, true);
@@ -366,8 +448,6 @@ switch ( $GET_DEV ) {
         try {
             if ($action === 'list') {
                 $data = $getJson();
-
-                // 1. ตรวจสอบว่ามีหมวดพื้นฐานหรือยัง?
                 $hasDefault = false;
                 foreach ($data as $cat) {
                     if (isset($cat['id']) && $cat['id'] === 'cat_default') {
@@ -375,15 +455,11 @@ switch ( $GET_DEV ) {
                         break;
                     }
                 }
-
-                // 2. ถ้ายังไม่มี ให้แทรกเข้าไปเป็น "อันแรก"
                 if (!$hasDefault) {
                     $defaultCategory = $getDefaultData();
                     array_unshift($data, $defaultCategory);
                     $saveJson($data);
                 }
-
-                // 3. กรองข้อมูลตาม User
                 if ($currentUser) {
                     $data = array_values(array_filter($data, function($item) use ($currentUser) {
                         $isOwner = isset($item['created_by']) && $item['created_by'] == $currentUser;
@@ -391,7 +467,6 @@ switch ( $GET_DEV ) {
                         return $isOwner || $isSystem;
                     }));
                 }
-
                 $json_data['success'] = true;
                 $json_data['data'] = $data;
                 $json_data['status'] = 'success';
@@ -418,7 +493,6 @@ switch ( $GET_DEV ) {
             elseif ($action === 'edit_category') {
                 $id = $_POST['id'] ?? '';
                 $name = $_POST['category_name'] ?? '';
-
                 if ($id === 'cat_default') {
                     $json_data['success'] = false;
                     $json_data['message'] = 'ไม่สามารถแก้ไขชื่อหมวดหมู่พื้นฐานได้';
@@ -470,7 +544,6 @@ switch ( $GET_DEV ) {
                 $stId = $_POST['status_id'] ?? '';
                 $name = $_POST['status_name'] ?? '';
                 $color = $_POST['color_class'] ?? 'secondary';
-
                 if ($catId && $stId) {
                     $data = $getJson();
                     foreach ($data as &$cat) {
@@ -492,7 +565,6 @@ switch ( $GET_DEV ) {
             elseif ($action === 'delete_status') {
                 $catId = $_POST['category_id'] ?? '';
                 $statusId = $_POST['status_id'] ?? '';
-
                 if (strpos($statusId, 'st_def_') === 0) {
                     $json_data['success'] = false;
                     $json_data['message'] = 'ไม่สามารถลบสถานะพื้นฐานของระบบได้';
@@ -544,7 +616,98 @@ switch ( $GET_DEV ) {
             $json_data['message'] = 'Error: ' . $e->getMessage();
         }
         break;
+        
+    case 'report':
+        $start_date = sanitizeGetParam('start_date', 'string', date('Y-m-01'));
+        $end_date   = sanitizeGetParam('end_date', 'string', date('Y-m-t'));
+        
+        $is_admin  = ( stripos( $_SESSION['role'] ?? '', 'admin' ) !== false );
+        $user_dept = $_SESSION['department'] ?? '';
 
+        $params = [$start_date, $end_date];
+        
+        // [แก้ไข] เพิ่ม Subquery ดึงชื่อคนทำรายการล่าสุด (scanner_name) จาก log
+        // โดยไม่เอาสถานะ 'เปิดอ่าน' หรือ 'Viewed'
+        $sql = "SELECT d.document_code, d.title, d.created_at, d.current_status, d.receiver_name, 
+                       u.department as sender_dept, u.fullname as sender_name,
+                       (SELECT actor_name_snapshot 
+                        FROM document_status_log 
+                        WHERE document_id = d.document_id 
+                        AND status NOT IN ('เปิดอ่าน', 'Viewed') 
+                        ORDER BY action_time DESC LIMIT 1) as scanner_name
+                FROM documents d
+                LEFT JOIN users u ON d.created_by = u.user_id
+                WHERE DATE(d.created_at) BETWEEN ? AND ? ";
+        
+        if ( !$is_admin && !empty( $user_dept ) ) {
+            $sql .= " AND (
+                        u.department = ? 
+                        OR d.receiver_name IN (SELECT fullname FROM users WHERE department = ?)
+                      )";
+            $params[] = $user_dept;
+            $params[] = $user_dept;
+        }
+        
+        $sql .= " ORDER BY u.department ASC, d.created_at DESC";
+
+        $data = CON::selectArrayDB( $params, $sql );
+        
+        if($data) {
+            foreach($data as &$row) {
+                 $row['created_at_fmt'] = date('d/m/Y H:i', strtotime($row['created_at']));
+            }
+        } else {
+            $data = [];
+        }
+
+        $json_data['status'] = 'success';
+        $json_data['data']   = $data;
+        $json_data['total_count'] = count($data);
+        break;
+
+    case 'report_detail':
+        $dept       = sanitizeGetParam('department', 'string', '');
+        $type       = sanitizeGetParam('type', 'string', '');
+        $start_date = sanitizeGetParam('start_date', 'string', '');
+        $end_date   = sanitizeGetParam('end_date', 'string', '');
+
+        if (empty($dept) || empty($type)) {
+            $json_data['status'] = 'error';
+            $json_data['message'] = 'ข้อมูลไม่ครบถ้วน';
+            break;
+        }
+
+        $sql = "";
+        $params = [$dept, $start_date, $end_date];
+
+        if ($type === 'sent') {
+            $sql = "SELECT d.document_code, d.title, d.created_at, d.current_status, d.receiver_name as target_name
+                    FROM documents d 
+                    JOIN users u ON d.created_by = u.user_id 
+                    WHERE u.department = ? 
+                    AND DATE(d.created_at) BETWEEN ? AND ? 
+                    ORDER BY d.created_at DESC";
+        } else {
+            $sql = "SELECT d.document_code, d.title, d.created_at, d.current_status, d.sender_name as target_name
+                    FROM documents d 
+                    JOIN users u ON d.receiver_name = u.fullname 
+                    WHERE u.department = ? 
+                    AND DATE(d.created_at) BETWEEN ? AND ? 
+                    ORDER BY d.created_at DESC";
+        }
+
+        $details = CON::selectArrayDB($params, $sql);
+        
+        if ($details) {
+            foreach ($details as &$row) {
+                $row['created_at_fmt'] = date('d/m/Y H:i', strtotime($row['created_at']));
+            }
+        }
+
+        $json_data['status'] = 'success';
+        $json_data['data']   = $details ?? [];
+        break;
+    
     default:
         http_response_code( 400 );
         $json_data = [

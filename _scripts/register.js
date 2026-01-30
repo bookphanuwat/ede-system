@@ -1,70 +1,80 @@
 // register.js - JavaScript สำหรับหน้าลงทะเบียนเอกสาร
 
-const API_URL = 'api/manage_workflow.php';
-let allWorkflows = [];
+// ตรวจสอบว่ามีค่า Config จากหน้า PHP หรือไม่ ถ้าไม่มีให้ใช้ค่า Default
+const API_URL = (typeof window.PAGE_API_URL !== 'undefined') 
+                ? window.PAGE_API_URL 
+                : 'api/manage_workflow.php';
+
+// ดึง User ID จาก global
+const userId = (typeof window.CURRENT_USER_ID !== 'undefined') 
+               ? window.CURRENT_USER_ID 
+               : '';
 
 // ฟังก์ชันหลักที่ทำงานเมื่อโหลดหน้าเว็บเสร็จ
 document.addEventListener('DOMContentLoaded', function() {
-    // โหลดข้อมูล Workflows
     loadWorkflows();
 
-    // Event Listener สำหรับเลือก Workflow
-    document.getElementById('workflowSelect').addEventListener('change', function() {
-        const selectedId = this.value;
-        const submitBtn = document.getElementById('btnSubmit');
-        const statusPreview = document.getElementById('statusPreview');
-        const initialStatusInput = document.getElementById('initialStatusInput');
-        const workflowIdInput = document.getElementById('workflowIdInput');
+    const wfSelect = document.getElementById('workflowSelect');
+    if (wfSelect) {
+        wfSelect.addEventListener('change', function() {
+            const selectedId = this.value;
+            const submitBtn = document.getElementById('btnSubmit');
+            const statusPreview = document.getElementById('statusPreview');
+            const initialStatusInput = document.getElementById('initialStatusInput');
+            const workflowIdInput = document.getElementById('workflowIdInput');
 
-        if (selectedId) {
-            const selectedCat = allWorkflows.find(cat => cat.id === selectedId);
+            if (selectedId) {
+                const selectedCat = allWorkflows.find(cat => cat.id === selectedId);
 
-            if (selectedCat && selectedCat.statuses.length > 0) {
-                // เปิดใช้งานปุ่มบันทึก
-                submitBtn.classList.remove('btn-disabled-custom');
-                submitBtn.style.backgroundColor = '#00E676';
-                submitBtn.style.color = 'black';
+                if (selectedCat && selectedCat.statuses.length > 0) {
+                    submitBtn.classList.remove('btn-disabled-custom');
+                    submitBtn.style.backgroundColor = '#00E676';
+                    submitBtn.style.color = 'black';
 
-                // ตั้งค่าสถานะเริ่มต้น
-                const firstStatus = selectedCat.statuses[0];
-                initialStatusInput.value = firstStatus.name;
-                workflowIdInput.value = selectedCat.id;
+                    const firstStatus = selectedCat.statuses[0];
+                    initialStatusInput.value = firstStatus.name;
+                    workflowIdInput.value = selectedCat.id;
 
-                // แสดง Preview สถานะ
-                statusPreview.innerHTML = `<i class="fas fa-check-circle text-success"></i> สถานะเริ่มต้น: <span class="badge bg-${firstStatus.color}">${firstStatus.name}</span>`;
+                    statusPreview.innerHTML = `<i class="fas fa-check-circle text-success"></i> สถานะเริ่มต้น: <span class="badge bg-${firstStatus.color}">${firstStatus.name}</span>`;
+                } else {
+                    alert('หมวดหมู่นี้ยังไม่มีการกำหนดสถานะ (Workflow ว่างเปล่า) กรุณาไปตั้งค่าก่อน');
+                    this.value = "";
+                    disableSubmit();
+                }
             } else {
-                alert('หมวดหมู่นี้ยังไม่มีการกำหนดสถานะ (Workflow ว่างเปล่า) กรุณาไปตั้งค่าก่อน');
-                this.value = "";
                 disableSubmit();
             }
-        } else {
-            disableSubmit();
-        }
-    });
+        });
+    }
 });
 
-// ฟังก์ชันปิดการใช้งานปุ่ม Submit
 function disableSubmit() {
     const btn = document.getElementById('btnSubmit');
     const preview = document.getElementById('statusPreview');
 
-    btn.classList.add('btn-disabled-custom');
-    btn.removeAttribute('style');
+    if (btn) {
+        btn.classList.add('btn-disabled-custom');
+        btn.removeAttribute('style');
+    }
 
-    preview.innerHTML = `<i class="fas fa-arrow-right"></i> สถานะเริ่มต้น: <span class="text-secondary">-</span>`;
-    document.getElementById('initialStatusInput').value = "";
+    if (preview) {
+        preview.innerHTML = `<i class="fas fa-arrow-right"></i> สถานะเริ่มต้น: <span class="text-secondary">-</span>`;
+    }
+    
+    const statusInput = document.getElementById('initialStatusInput');
+    if (statusInput) statusInput.value = "";
 }
 
-// ฟังก์ชันโหลดข้อมูล Workflows จาก API
 function loadWorkflows() {
     const select = document.getElementById('workflowSelect');
+    if (!select) return;
+
     select.innerHTML = '<option value="" disabled selected>กำลังโหลดข้อมูล...</option>';
 
-    // ดึง User ID จาก global variable ที่ถูกกำหนดใน PHP
-    const userId = (typeof CURRENT_USER_ID !== 'undefined') ? CURRENT_USER_ID : '';
+    // [แก้ไข] ตรวจสอบตัวเชื่อม URL (ใช้ & ถ้ามี ? อยู่แล้ว)
+    const separator = API_URL.includes('?') ? '&' : '?';
 
-    // ส่ง user_id ไปกับ request เพื่อกรองข้อมูล
-    fetch(`${API_URL}?action=list&user_id=${userId}`)
+    fetch(`${API_URL}${separator}action=list&user_id=${userId}`)
         .then(res => res.json())
         .then(res => {
             select.innerHTML = '<option value="" selected disabled>-- กรุณาเลือกหมวดหมู่สถานะ --</option>';

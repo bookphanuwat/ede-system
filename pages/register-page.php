@@ -4,29 +4,44 @@
     include 'includes/topbar.php';
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
-        // 1. รับค่าจากฟอร์ม
-        $title = $_POST['title'];
-        $type_id = $_POST['type_id'];
-        $reference_no = $_POST['reference_no'];
-        $sender_name = $_POST['sender_name'];
-        $receiver_name = $_POST['receiver_name'];
-        $created_by = $_POST['created_by'];
+        // ------------------------------------------------------------------
+        // [Security Fix] 1. Sanitize & Validate Inputs
+        // ------------------------------------------------------------------
+        
+        function clean_input($data) {
+            $data = trim($data);
+            $data = stripslashes($data);
+            $data = htmlspecialchars($data, ENT_QUOTES, 'UTF-8');
+            return $data;
+        }
 
-        // [แก้ไข 1] รับค่า workflow_id (สำคัญมากสำหรับการระบุหมวดหมู่สถานะ)
-        // ถ้าไม่มีค่าส่งมา ให้ใช้ 'cat_default' (General)
-        $workflow_id = !empty($_POST['workflow_id']) ? $_POST['workflow_id'] : 'cat_default';
+        $title          = clean_input($_POST['title']);
+        $reference_no   = clean_input($_POST['reference_no']);
+        $sender_name    = clean_input($_POST['sender_name']);
+        $type_id        = filter_var($_POST['type_id'], FILTER_SANITIZE_NUMBER_INT);
+        $created_by     = filter_var($_POST['created_by'], FILTER_SANITIZE_NUMBER_INT);
 
-        // รับค่าสถานะเริ่มต้นจาก Workflow
-        $initial_status = !empty($_POST['current_status']) ? $_POST['current_status'] : 'ลงทะเบียนใหม่';
+        $raw_workflow_id = !empty($_POST['workflow_id']) ? $_POST['workflow_id'] : 'cat_default';
+        $raw_status      = !empty($_POST['current_status']) ? $_POST['current_status'] : 'ลงทะเบียนใหม่';
+
+        if (!preg_match("/^[a-zA-Z0-9_\-\.\p{Thai}\s]+$/u", $raw_workflow_id)) {
+             $raw_workflow_id = 'cat_default';
+        }
+        $workflow_id = $raw_workflow_id;
+
+        if (!preg_match("/^[a-zA-Z0-9_\-\.\p{Thai}\s]+$/u", $raw_status)) {
+             $raw_status = 'ลงทะเบียนใหม่';
+        }
+        $initial_status = $raw_status;
+        $receiver_name  = '-';
 
         // ------------------------------------------------------------------
-        // 2. สร้างรหัสเอกสาร (System Code)
+        // 2. สร้างรหัสเอกสาร
         // ------------------------------------------------------------------
         $uuid_part = substr(uniqid(), -5);
         $document_code = "EDE-" . date("Ymd") . "-" . strtoupper($uuid_part) . rand(10,99);
 
         // 3. บันทึกลงฐานข้อมูล
-        // [แก้ไข 2] เพิ่ม workflow_id เข้าไปในคำสั่ง SQL
         $sql = "INSERT INTO documents (document_code, title, type_id, reference_no, sender_name, receiver_name, created_by, current_status, workflow_id)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
@@ -39,26 +54,27 @@
             $receiver_name,
             $created_by,
             $initial_status,
-            $workflow_id // [แก้ไข 3] ส่งค่า workflow_id ไปบันทึก
+            $workflow_id
         ];
         CON::updateDB( $params, $sql );
 
-        // หา ID ของเอกสารที่เพิ่งสร้าง
         $sqlGetId = "SELECT document_id FROM documents WHERE document_code = ?";
         $resId    = CON::selectArrayDB( [$document_code], $sqlGetId );
         $document_id = $resId[0]['document_id'] ?? 0;
 
-        // 4. สร้าง Log แรก
+        // 4. สร้าง Log
         $sqlLog = "INSERT INTO document_status_log (document_id, status, action_by) VALUES (?, ?, ?)";
         CON::updateDB( [$document_id, $initial_status, $created_by], $sqlLog );
 
         // 5. ส่งไปหน้าพิมพ์
+        while (ob_get_level()) { ob_end_clean(); }
         header("Location: /ede-system/print/" . $document_code . "/");
         exit;
 
     } catch (Exception $e) {
         if ($e->getCode() == 23000) {
-             echo "<script>alert('เกิดข้อผิดพลาดในการสร้างรหัส (ซ้ำ) กรุณาลองใหม่'); window.history.back();</script>";
+             // [แก้ไขจุดที่ 1] ใส่ nonce ให้ script alert
+             echo "<script nonce=\"{$nonce}\">alert('เกิดข้อผิดพลาดในการสร้างรหัส (ซ้ำ) กรุณาลองใหม่'); window.history.back();</script>";
         } else {
              echo "Error: " . $e->getMessage();
         }
@@ -70,11 +86,9 @@
     $types_result = CON::selectArrayDB( [], $sql_types );
     $types = ( $types_result && count( $types_result ) > 0 ) ? $types_result : [];
 
-    // ถ้าไม่มีประเภท ให้เติมค่าเริ่มต้น
     if ( empty( $types ) ) {
         $types = [['type_id' => 1, 'type_name' => 'หนังสือภายนอก']];
     }
-
 ?>
 
 <style>
@@ -95,7 +109,6 @@
         <input type="hidden" name="current_status" id="initialStatusInput" value="">
         <input type="hidden" name="workflow_id" id="workflowIdInput" value="">
 
-        <!-- 1. ชื่อเรื่อง -->
         <div class="row mb-4 align-items-center">
             <div class="col-md-3 text-md-end">
                 <label class="fw-bold text-secondary">ชื่อเรื่อง</label> <span class="text-danger">*</span>
@@ -105,7 +118,6 @@
             </div>
         </div>
 
-        <!-- 2. เลขที่อ้างอิง -->
         <div class="row mb-4 align-items-center">
             <div class="col-md-3 text-md-end">
                 <label class="fw-bold text-secondary">เลขที่เอกสาร</label>
@@ -115,7 +127,6 @@
             </div>
         </div>
 
-        <!-- 3. ประเภทเอกสาร -->
         <div class="row mb-4 align-items-center">
             <div class="col-md-3 text-md-end">
                 <label class="fw-bold text-secondary">ประเภท</label>
@@ -129,7 +140,6 @@
             </div>
         </div>
 
-        <!-- 4. ผู้ส่ง -->
         <div class="row mb-4 align-items-center">
             <div class="col-md-3 text-md-end">
                 <label class="fw-bold text-secondary">ผู้ส่ง</label> <span class="text-danger">*</span>
@@ -139,7 +149,6 @@
             </div>
         </div>
 
-        <!-- 5. หมวดหมู่สถานะ -->
         <div class="row mb-4 align-items-center bg-light p-3 rounded border border-secondary border-opacity-25 mx-0">
             <div class="col-md-3 text-md-end">
                 <label class="fw-bold text-primary"><i class="fas fa-project-diagram me-1"></i> หมวดหมู่สถานะ</label> <span class="text-danger">*</span>
@@ -168,61 +177,90 @@
     </form>
 </div>
 
-<script>
-    const API_URL = '../api/manage_workflow.php';
-    const CURRENT_USER_ID = "<?php echo $_SESSION['user_id'] ?? ''; ?>";
-    let allWorkflows = [];
+<script nonce="<?php echo $nonce; ?>">
+    // --- ส่วน Config: ส่งค่าจาก PHP ไปให้ JavaScript ---
+    // ใช้ window. เพื่อป้องกัน Error "Already declared" กรณีมีไฟล์อื่นประกาศไว้แล้ว
+    window.CURRENT_USER_ID = "<?php echo $_SESSION['user_id'] ?? ''; ?>";
+    
+    // หมายเหตุ: ถ้าใช้ register.js แยกแล้ว ควรลบ Logic ด้านล่างนี้ออกเพื่อให้เรียกผ่านไฟล์ JS อย่างเดียว
+    // แต่ถ้ายังไม่ได้ include ไฟล์ js แยก ให้คงโค้ดด้านล่างไว้ แต่เปลี่ยน var เป็น window. หรือชื่ออื่น
+    
+    // กำหนด API URL ให้ถูกต้องสำหรับหน้านี้ (../api/...)
+    window.PAGE_API_URL = '../api/index.php?dev=manage-workflow'; 
+
+    /* [ข้อแนะนำ] 
+       หากคุณโหลด js/register.min.js หรือ _scripts/register.js เข้ามาในหน้านี้แล้ว
+       โค้ดด้านล่างนี้จะซ้ำซ้อนและอาจทำงานตีกัน แนะนำให้ลบ หรือ Comment ออกครับ
+       และให้แน่ใจว่าในไฟล์ js แยก ได้แก้ให้ใช้ค่าจาก window.PAGE_API_URL หรือ window.CURRENT_USER_ID
+    */
+
+    // --- เริ่มต้น Logic ในหน้าเพจ (ถ้าจำเป็นต้องใช้ Inline Script) ---
+    var allWorkflows = []; // ใช้ var หรือ let ตามปกติ (ถ้ายังไม่ประกาศในไฟล์อื่น)
 
     document.addEventListener( 'DOMContentLoaded', function() {
-        loadWorkflows();
+        // ใช้ URL ที่ถูกต้องจากหน้านี้
+        loadWorkflowsInline(window.PAGE_API_URL);
 
-        document.getElementById( 'workflowSelect' ).addEventListener( 'change', function() {
-            const selectedId = this.value;
-            const submitBtn = document.getElementById( 'btnSubmit' );
-            const statusPreview = document.getElementById( 'statusPreview' );
-            const initialStatusInput = document.getElementById( 'initialStatusInput' );
-            const workflowIdInput = document.getElementById( 'workflowIdInput' );
+        const wfSelect = document.getElementById( 'workflowSelect' );
+        if(wfSelect) {
+            wfSelect.addEventListener( 'change', function() {
+                const selectedId = this.value;
+                const submitBtn = document.getElementById( 'btnSubmit' );
+                const statusPreview = document.getElementById( 'statusPreview' );
+                const initialStatusInput = document.getElementById( 'initialStatusInput' );
+                const workflowIdInput = document.getElementById( 'workflowIdInput' );
 
-            if ( selectedId ) {
-                const selectedCat = allWorkflows.find( cat => cat.id === selectedId );
+                if ( selectedId ) {
+                    const selectedCat = allWorkflows.find( cat => cat.id === selectedId );
 
-                if ( selectedCat && selectedCat.statuses.length > 0 ) {
-                    submitBtn.classList.remove( 'btn-disabled-custom' );
-                    submitBtn.style.backgroundColor = '#00E676';
-                    submitBtn.style.color = 'black';
+                    if ( selectedCat && selectedCat.statuses.length > 0 ) {
+                        submitBtn.classList.remove( 'btn-disabled-custom' );
+                        submitBtn.style.backgroundColor = '#00E676';
+                        submitBtn.style.color = 'black';
 
-                    const firstStatus = selectedCat.statuses[0];
-                    initialStatusInput.value = firstStatus.name;
-                    workflowIdInput.value = selectedCat.id;
+                        const firstStatus = selectedCat.statuses[0];
+                        initialStatusInput.value = firstStatus.name;
+                        workflowIdInput.value = selectedCat.id;
 
-                    statusPreview.innerHTML = `<i class="fas fa-check-circle text-success"></i> สถานะเริ่มต้น: <span class="badge bg-${firstStatus.color}">${firstStatus.name}</span>`;
+                        statusPreview.innerHTML = `<i class="fas fa-check-circle text-success"></i> สถานะเริ่มต้น: <span class="badge bg-${firstStatus.color}">${firstStatus.name}</span>`;
+                    } else {
+                        alert( 'หมวดหมู่นี้ยังไม่มีการกำหนดสถานะ (Workflow ว่างเปล่า) กรุณาไปตั้งค่าก่อน' );
+                        this.value = "";
+                        disableSubmit();
+                    }
                 } else {
-                    alert( 'หมวดหมู่นี้ยังไม่มีการกำหนดสถานะ (Workflow ว่างเปล่า) กรุณาไปตั้งค่าก่อน' );
-                    this.value = "";
                     disableSubmit();
                 }
-            } else {
-                disableSubmit();
-            }
-        } );
+            } );
+        }
     } );
 
     function disableSubmit() {
         const btn = document.getElementById( 'btnSubmit' );
         const preview = document.getElementById( 'statusPreview' );
 
-        btn.classList.add( 'btn-disabled-custom' );
-        btn.removeAttribute( 'style' );
-
-        preview.innerHTML = `<i class="fas fa-arrow-right"></i> สถานะเริ่มต้น: <span class="text-secondary">-</span>`;
-        document.getElementById( 'initialStatusInput' ).value = "";
+        if(btn) {
+            btn.classList.add( 'btn-disabled-custom' );
+            btn.removeAttribute( 'style' );
+        }
+        
+        if(preview) {
+            preview.innerHTML = `<i class=\"fas fa-arrow-right\"></i> สถานะเริ่มต้น: <span class=\"text-secondary\">-</span>`;
+        }
+        
+        const statusInput = document.getElementById( 'initialStatusInput' );
+        if(statusInput) statusInput.value = "";
     }
 
-    function loadWorkflows() {
+    // เปลี่ยนชื่อฟังก์ชันเพื่อไม่ให้ชนกับในไฟล์ JS อื่น (ถ้ามี)
+    function loadWorkflowsInline(apiUrl) {
         const select = document.getElementById( 'workflowSelect' );
+        if(!select) return;
+
         select.innerHTML = '<option value="" disabled selected>กำลังโหลดข้อมูล...</option>';
 
-        fetch( `${API_URL}?action=list&user_id=${CURRENT_USER_ID}` )
+        // ใช้ CURRENT_USER_ID ที่ประกาศแบบ window
+        fetch( `${apiUrl}&action=list&user_id=${window.CURRENT_USER_ID}` )
             .then( res => res.json() )
             .then( res => {
                 select.innerHTML = '<option value="" selected disabled>-- กรุณาเลือกหมวดหมู่สถานะ --</option>';
