@@ -13,7 +13,7 @@ header( 'Content-Type: application/json; charset=utf-8' );
 
 // Setting up some server access controls to allow people to get information
 header( "Access-Control-Allow-Origin: https://athweb.xyz" );
-header( 'Access-Control-Allow-Methods:  POST, GET' );
+//header( 'Access-Control-Allow-Methods:  POST, GET' );
 
 /**
  * ============================================================================

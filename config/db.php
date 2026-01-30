@@ -18,9 +18,10 @@ try {
 
     $pdo = new PDO( $dsn, $username, $password, $options );
 
-}  catch ( PDOException $e ) {
-    // แก้เป็นบรรทัดนี้ เพื่อให้เห็น Error ตัวแดงๆ
-    echo "Connection failed: " . $e->getMessage();
+} catch (PDOException $e) {
+    // บันทึกลง Log แทนการ echo ออกหน้าจอ
+    error_log("Connection failed: " . $e->getMessage());
+    echo "เกิดข้อผิดพลาดในการเชื่อมต่อระบบ กรุณาติดต่อผู้ดูแลระบบ";
     exit;
 }
 

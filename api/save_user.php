@@ -11,7 +11,13 @@ $current_user_id = $_SESSION['user_id'] ?? 0;
 // รับค่า user_id ที่ส่งมาจากฟอร์ม
 $post_user_id = isset($_POST['user_id']) ? intval($_POST['user_id']) : 0;
 
-// Security Check: ถ้าไม่ใช่ Admin แต่พยายามแก้ ID ของคนอื่น หรือพยายามเพิ่ม ID ใหม่
+// ตรวจสอบว่า User ที่กำลังถูกแก้ไขเป็นใคร
+$stmtCheck = $pdo->prepare("SELECT role_id FROM users WHERE user_id = ?");
+$stmtCheck->execute([$post_user_id]);
+$target_user = $stmtCheck->fetch();
+
+// Logic: ถ้าไม่ใช่ Admin ห้ามแก้คนอื่น 
+// และถ้าเป็น Admin ทั่วไป ห้ามแก้ Admin คนอื่น (สมมติ role_id 1 คือ Super Admin)
 if (!$is_admin && ($post_user_id !== $current_user_id)) {
      header('Location: ../user_form.php?status=error&msg=คุณไม่มีสิทธิ์แก้ไขข้อมูลผู้อื่น');
      exit();

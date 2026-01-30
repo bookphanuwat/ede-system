@@ -201,8 +201,12 @@ document.addEventListener('DOMContentLoaded', function() {
             const userId = this.getAttribute('data-id');
             const username = this.getAttribute('data-username');
             
+            // ✅ ดึงค่า Token จาก PHP Session มาไว้ในตัวแปร JS
+            const csrfToken = '<?php echo $_SESSION['csrf_token'] ?? ''; ?>';
+            
             if (confirm("คุณต้องการลบผู้ใช้ '" + username + "' ใช่หรือไม่?\nการกระทำนี้ไม่สามารถเรียกคืนได้")) {
-                window.location.href = '<?php echo SITE_URL; ?>/api/delete_user.php?id=' + userId;
+                // ✅ ส่งค่า csrf_token ไปในรูปแบบ GET parameter
+                window.location.href = '<?php echo SITE_URL; ?>/api/delete_user.php?id=' + userId + '&csrf_token=' + csrfToken;
             }
         });
     });
