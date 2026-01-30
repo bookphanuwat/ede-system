@@ -32,26 +32,52 @@
         </div>";
     }
 
-    // --- 2. ดึงข้อมูล ---
+    // --- 2. ดึงข้อมูล & Pagination ---
     $users = [];
     $is_admin = (isset($_SESSION['role']) && stripos($_SESSION['role'], 'admin') !== false);
     $current_user_id = $_SESSION['user_id'] ?? 0;
 
-    $sql = "SELECT u.*, r.role_name FROM users u LEFT JOIN roles r ON u.role_id = r.role_id ";
+    // 2.1 ตั้งค่า Pagination
+    $limit = 10; // แสดง 10 รายการต่อหน้า
+    $page = isset($_GET['page']) && is_numeric($_GET['page']) ? (int)$_GET['page'] : 1;
+    if ($page < 1) $page = 1;
+    $offset = ($page - 1) * $limit;
+
+    // 2.2 สร้างเงื่อนไข SQL พื้นฐาน
+    $whereSQL = "";
     $params = [];
 
     if (!$is_admin) {
-        $sql .= " WHERE u.user_id = ? ";
+        $whereSQL = " WHERE u.user_id = ? ";
         $params[] = $current_user_id;
     }
 
-    $sql .= " ORDER BY u.user_id ASC";
+    // 2.3 นับจำนวนข้อมูลทั้งหมด (Count)
+    $totalRows = 0;
+    if (class_exists('CON')) {
+        $sqlCount = "SELECT COUNT(*) as total FROM users u $whereSQL";
+        $resCount = CON::selectArrayDB($params, $sqlCount);
+        $totalRows = $resCount[0]['total'] ?? 0;
+    }
+    
+    // คำนวณจำนวนหน้าทั้งหมด
+    $totalPages = ceil($totalRows / $limit);
+    if ($totalPages == 0) $totalPages = 1; // บังคับให้เป็น 1 หน้าแม้ไม่มีข้อมูล
+
+    // ปรับหน้าปัจจุบันไม่ให้เกินจำนวนหน้าที่มี
+    if ($page > $totalPages) $page = $totalPages;
+
+    // 2.4 ดึงข้อมูลตามหน้า (Query with Limit/Offset)
+    $sql = "SELECT u.*, r.role_name 
+            FROM users u 
+            LEFT JOIN roles r ON u.role_id = r.role_id 
+            $whereSQL 
+            ORDER BY u.user_id ASC 
+            LIMIT $limit OFFSET $offset";
     
     if (class_exists('CON')) {
         $users = CON::selectArrayDB($params, $sql) ?? [];
     }
-    
-    // (ลบส่วน $userRows .= ... ออกไปเลย เพราะเราจะไปวนลูปข้างล่างแทน)
 ?>
 
 <div class="page-content">
@@ -132,11 +158,36 @@
 
     <nav class="mt-4 d-flex justify-content-center">
         <ul class="pagination pagination-sm">
-            <li class="page-item disabled"><a class="page-link rounded-start-pill border-0 bg-light" href="#">ก่อนหน้า</a></li>
-            <li class="page-item active"><a class="page-link border-0" style="background: var(--color-settings);" href="#">1</a></li>
-            <li class="page-item disabled"><a class="page-link rounded-end-pill border-0 bg-light" href="#">ถัดไป</a></li>
+            
+            <li class="page-item <?php echo ($page <= 1) ? 'disabled' : ''; ?>">
+                <a class="page-link rounded-start-pill border-0 <?php echo ($page <= 1) ? 'bg-light text-muted' : 'bg-white text-primary shadow-sm'; ?>" 
+                   href="<?php echo ($page > 1) ? '?page='.($page-1) : '#'; ?>">
+                   <i class="fas fa-chevron-left me-1"></i> ก่อนหน้า
+                </a>
+            </li>
+
+            <?php for($i = 1; $i <= $totalPages; $i++): ?>
+                <li class="page-item <?php echo ($page == $i) ? 'active' : ''; ?>">
+                    <a class="page-link border-0 mx-1 rounded-circle d-flex align-items-center justify-content-center <?php echo ($page == $i) ? 'shadow-sm' : 'text-secondary bg-transparent'; ?>" 
+                       style="width: 35px; height: 35px; <?php echo ($page == $i) ? 'background-color: var(--color-settings, #0d6efd);' : ''; ?>"
+                       href="?page=<?php echo $i; ?>">
+                       <?php echo $i; ?>
+                    </a>
+                </li>
+            <?php endfor; ?>
+
+            <li class="page-item <?php echo ($page >= $totalPages) ? 'disabled' : ''; ?>">
+                <a class="page-link rounded-end-pill border-0 <?php echo ($page >= $totalPages) ? 'bg-light text-muted' : 'bg-white text-primary shadow-sm'; ?>" 
+                   href="<?php echo ($page < $totalPages) ? '?page='.($page+1) : '#'; ?>">
+                   ถัดไป <i class="fas fa-chevron-right ms-1"></i>
+                </a>
+            </li>
+
         </ul>
     </nav>
+    <div class="text-center text-muted small mt-2">
+        หน้า <?php echo $page; ?> จาก <?php echo $totalPages; ?> (ทั้งหมด <?php echo number_format($totalRows); ?> รายการ)
+    </div>
 </div>
 
 <script nonce="<?php echo isset($nonce) ? $nonce : ''; ?>">
@@ -151,8 +202,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const username = this.getAttribute('data-username');
             
             if (confirm("คุณต้องการลบผู้ใช้ '" + username + "' ใช่หรือไม่?\nการกระทำนี้ไม่สามารถเรียกคืนได้")) {
-                // เช็ค path api ให้ถูกต้อง
-                window.location.href = '../api/delete_user.php?id=' + userId;
+                window.location.href = '<?php echo SITE_URL; ?>/api/delete_user.php?id=' + userId;
             }
         });
     });

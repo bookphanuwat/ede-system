@@ -1,19 +1,23 @@
 <?php
+    // ตั้งค่าหัวข้อหน้าเว็บ
     $page_title   = "ประวัติการสแกน/อัปเดตล่าสุด";
     $header_class = "header-scan-history";
-    include 'includes/topbar.php';
+    
+    // เรียกใช้ Topbar (ซึ่งควรมีการ session_start() และเชื่อมต่อฐานข้อมูลมาแล้ว)
+    include 'includes/topbar.php'; 
 
     // ---------------------------------------------------------
-    // ส่วนที่ 1: AJAX Handler
+    // ส่วนที่ 1: AJAX Handler (สำหรับดูรายละเอียดใน Modal)
     // ---------------------------------------------------------
     if (isset($_GET['ajax_get_detail']) && isset($_GET['doc_id'])) {
+        // เคลียร์ Output Buffer เพื่อป้องกัน HTML ขยะติดไปกับ JSON
         while (ob_get_level()) { ob_end_clean(); } 
         header('Content-Type: application/json');
 
         $doc_id = $_GET['doc_id'];
         $response = ['success' => false];
 
-        // 1. ดึงรายละเอียดเอกสาร
+        // 1.1 ดึงรายละเอียดเอกสาร
         $sql_doc = "SELECT d.*, dt.type_name 
                     FROM documents d 
                     LEFT JOIN document_type dt ON d.type_id = dt.type_id 
@@ -33,7 +37,7 @@
                 'view_count' => number_format($d['view_count'] ?? 0)
             ];
 
-            // 2. ดึงประวัติ Timeline
+            // 1.2 ดึงประวัติ Timeline (ส่วนนี้ให้เห็นทั้งหมด เพื่อให้ User รู้ความเคลื่อนไหวต่อเนื่องของเอกสารนั้น)
             $sql_hist = "SELECT u.*, l.* FROM document_status_log l 
                          LEFT JOIN users u ON l.action_by = u.user_id 
                          WHERE l.document_id = ? 
@@ -44,14 +48,14 @@
             if (count($histData) > 0) {
                 foreach ($histData as $h) {
                     $h_time = date('d/m/Y H:i', strtotime($h['action_time']));
+                    // พยายามหาชื่อคนทำรายการ (ชื่อ Snapshot > ชื่อจริง > Username > ID)
                     $found_name = $h['actor_name_snapshot'] ?: ($h['fullname'] ?: ($h['username'] ?: "User ID: " . $h['action_by']));
                     $img_src = $h['actor_pic_snapshot'] ?: '';
                     
-                    // [LOGIC ใหม่] ถ้ามีรูป (LINE) โชว์รูป / ถ้าไม่มี (User ระบบ) โชว์ไอคอนสร้างเอง
+                    // Logic แสดงรูป Avatar ใน Timeline
                     if (!empty($img_src)) {
                         $user_icon = "<img src='$img_src' class='rounded-circle border me-2 user-avatar' style='width:35px; height:35px; object-fit:cover;'>";
                     } else {
-                        // สร้างรูป Avatar ขึ้นมาเอง (ไม่ต้องใช้ไฟล์ภาพ)
                         $user_icon = "<div class='rounded-circle bg-primary bg-opacity-10 d-flex align-items-center justify-content-center me-2 border border-primary border-opacity-25' style='width:35px; height:35px;'>
                                         <i class='fas fa-user-tie text-primary'></i>
                                       </div>";
@@ -98,8 +102,10 @@
     }
 
     // ---------------------------------------------------------
-    // ส่วนที่ 2: Main Page Logic
+    // ส่วนที่ 2: Main Page Logic (การดึงข้อมูลลงตาราง)
     // ---------------------------------------------------------
+    
+    // ฟังก์ชันสร้าง Badge สถานะ
     function getStatusBadge($status) {
         switch ($status) {
             case 'Received': return '<span class="badge rounded-pill bg-success px-3">สำเร็จ/ได้รับแล้ว</span>';
@@ -112,23 +118,59 @@
         }
     }
 
-    // SQL
-    $sql = "SELECT l.*, d.title, d.document_code, d.current_status, 
-                   u.fullname, u.username, 
-                   l.actor_name_snapshot, l.actor_pic_snapshot
-            FROM document_status_log l 
-            JOIN documents d ON l.document_id = d.document_id 
-            LEFT JOIN users u ON l.action_by = u.user_id 
-            WHERE l.log_id IN (
-                SELECT MAX(log_id) 
-                FROM document_status_log 
-                GROUP BY document_id
-            )
-            ORDER BY l.action_time DESC 
-            LIMIT 50";
-            
-    $history = CON::selectArrayDB([], $sql) ?? [];
+    // --- [START] กำหนด Logic SQL แยกตามสิทธิ์ ---
+    
+    // ดึงค่า Role และ User ID จาก Session (ตั้งค่า Default ป้องกัน Error)
+    $current_role = $_SESSION['role'] ?? 'User';
+    $current_user_id = $_SESSION['user_id'] ?? 0;
+    
+    $sql = "";
+    $params = [];
 
+    if ($current_role === 'Administrator') {
+        // === กรณี ADMIN ===
+        // เห็นภาพรวมทั้งหมด: ดึง Log ล่าสุดของ "ทุกเอกสาร" ในระบบ ไม่ว่าใครทำ
+        $sql = "SELECT l.*, d.title, d.document_code, d.current_status, 
+                       u.fullname, u.username, 
+                       l.actor_name_snapshot, l.actor_pic_snapshot
+                FROM document_status_log l 
+                JOIN documents d ON l.document_id = d.document_id 
+                LEFT JOIN users u ON l.action_by = u.user_id 
+                WHERE l.log_id IN (
+                    SELECT MAX(log_id) 
+                    FROM document_status_log 
+                    GROUP BY document_id
+                )
+                ORDER BY l.action_time DESC 
+                LIMIT 50";
+        // Admin ไม่ต้องใช้ parameter เพิ่ม
+    } else {
+        // === กรณี USER ทั่วไป ===
+        // เห็นเฉพาะของตัวเอง: ดึง Log ล่าสุด "ที่ User คนนี้ (action_by) เป็นคนทำ"
+        $sql = "SELECT l.*, d.title, d.document_code, d.current_status, 
+                       u.fullname, u.username, 
+                       l.actor_name_snapshot, l.actor_pic_snapshot
+                FROM document_status_log l 
+                JOIN documents d ON l.document_id = d.document_id 
+                LEFT JOIN users u ON l.action_by = u.user_id 
+                WHERE l.log_id IN (
+                    SELECT MAX(log_id) 
+                    FROM document_status_log 
+                    WHERE action_by = ? 
+                    GROUP BY document_id
+                )
+                ORDER BY l.action_time DESC 
+                LIMIT 50";
+        // ส่ง User ID เข้าไปกรองใน SQL
+        $params = [$current_user_id]; 
+    }
+            
+    // ดึงข้อมูลจากฐานข้อมูล
+    $history = CON::selectArrayDB($params, $sql) ?? [];
+
+    // --- [END] จบส่วนกำหนด Logic ---
+
+    // เตรียม HTML สำหรับแสดงในตาราง
     $historyRows = '';
     if (count($history) > 0) {
         foreach ($history as $row) {
@@ -143,26 +185,22 @@
             $device = htmlspecialchars($row['device_info'] ?? 'Unknown', ENT_QUOTES, 'UTF-8');
             $docId = $row['document_id'];
 
-            // Highlight row
+            // ไฮไลท์แถวถ้าสถานะคือ "เปิดอ่าน"
             $isViewed = in_array($status, ['เปิดอ่าน', 'Viewed']);
             $rowClass = $isViewed ? 'bg-soft-primary' : ''; 
             
-            // Icon Document
+            // ไอคอนแสดงประเภท
             $iconType = $isViewed 
                 ? '<div class="icon-circle bg-white text-primary shadow-sm"><i class="fas fa-qrcode"></i></div>' 
                 : '<div class="icon-circle bg-light text-secondary"><i class="fas fa-file-alt"></i></div>';
 
-            // User Info
+            // จัดการรูปภาพผู้ใช้งาน
             $actorName = $row['actor_name_snapshot'] ?: ($row['fullname'] ?: ($row['username'] ?: 'Unknown'));
             $actorImgUrl = $row['actor_pic_snapshot'];
 
-            // [LOGIC สำคัญ] การแสดงผลรูปประจำตัว
             if (!empty($actorImgUrl)) {
-                // กรณี: มีรูป (มาจาก LINE) -> แสดงรูป <img>
-                // ใส่ onerror เผื่อรูป LINE หมดอายุ ให้กลับไปเป็นไอคอน
                 $userAvatarHtml = "<img src='$actorImgUrl' class='rounded-circle border w-100 h-100 shadow-sm user-avatar' style='object-fit:cover;'>";
             } else {
-                // กรณี: ไม่มีรูป (User ระบบ) -> แสดงไอคอน <i class="fa-user-tie"></i>
                 $userAvatarHtml = "<div class='rounded-circle bg-white w-100 h-100 d-flex align-items-center justify-content-center border shadow-sm'>
                                       <i class='fas fa-user-tie text-secondary' style='font-size: 1.2rem;'></i>
                                    </div>";
@@ -176,7 +214,7 @@
                 <div class='text-dark fw-bold text-truncate' style='max-width: 160px; font-size: 1rem;'>$actorName</div>
             </div>";
 
-            // Code & Title
+            // ลิงก์รหัสเอกสารและชื่อเรื่อง
             $codeLink = "<a href='#' class='doc-link shadow-sm btn-open-detail mb-2' data-id='$docId'><i class='fas fa-search me-1'></i>$code</a>";
             $titleDisplay = "<div class='text-dark fw-bold text-wrap' style='font-size: 1.2rem; line-height:1.4;'>$title</div>";
 
@@ -214,6 +252,7 @@
 ?>
 
 <style>
+    /* CSS เพิ่มเติมเฉพาะหน้านี้ */
     .doc-link {
         color: #29B6F6; font-weight: bold; text-decoration: none;
         background: rgba(41, 182, 246, 0.1); padding: 5px 15px; border-radius: 20px; 
@@ -242,7 +281,10 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
             <h5 class="fw-bold text-dark mb-1"><i class="fas fa-history me-2 text-primary"></i>ประวัติการสแกน/อัปเดต (ล่าสุด)</h5>
-            <small class="text-muted" style="font-size: 0.9rem;">แสดงสถานะล่าสุดของเอกสารแต่ละฉบับ | คลิกที่ <span class="text-primary fw-bold">รหัสเอกสารสีฟ้า</span> เพื่อดูรายละเอียด</small>
+            <small class="text-muted" style="font-size: 0.9rem;">
+                <?php if($current_role === 'Administrator') echo 'แสดงสถานะล่าสุดของเอกสารทั้งหมดในระบบ (Admin View)'; else echo 'แสดงรายการที่คุณดำเนินการล่าสุด'; ?>
+                | คลิกที่ <span class="text-primary fw-bold">รหัสเอกสารสีฟ้า</span> เพื่อดูรายละเอียด
+            </small>
         </div>
         <button id="btnReload" class="btn btn-light border rounded-pill shadow-sm text-secondary px-4 py-2">
             <i class="fas fa-sync-alt me-1"></i> รีเฟรช
@@ -310,19 +352,18 @@
     </div>
 </div>
 
-<script nonce="<?php echo $nonce; ?>">
+<script nonce="<?php echo $nonce ?? ''; ?>">
 document.addEventListener('DOMContentLoaded', function() {
     
-    // 1. Handle Image Errors (กรณีรูป LINE เสีย ให้เปลี่ยนกลับเป็นไอคอน)
+    // 1. จัดการกรณีรูปโหลดไม่ขึ้น (Image Error Handling)
     document.addEventListener('error', function(e) {
         if (e.target && e.target.tagName === 'IMG' && e.target.classList.contains('user-avatar')) {
-            // แทนที่จะโหลดรูป 404 ให้เปลี่ยน img เป็น div icon (โดยการซ่อน img แล้วแทรก div)
-            // แต่วิธีง่ายกว่าคือใช้ placeholder
+             // ใช้ Placeholder หากรูป LINE หมดอายุหรือโหลดไม่ได้
              e.target.src = 'https://via.placeholder.com/45/f0f0f0/888888?text=USER'; 
         }
     }, true);
 
-    // 2. Handle Refresh Button
+    // 2. ปุ่ม Refresh
     var btnReload = document.getElementById('btnReload');
     if (btnReload) {
         btnReload.addEventListener('click', function() {
@@ -330,7 +371,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // 3. Handle Open Detail Modal
+    // 3. คลิกปุ่มเพื่อเปิด Modal
     document.body.addEventListener('click', function(e) {
         const target = e.target.closest('.btn-open-detail');
         if (target) {
@@ -341,6 +382,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
+// ฟังก์ชันเรียกดูข้อมูลผ่าน AJAX
 function openDetailModal(docId) {
     var myModal = new bootstrap.Modal(document.getElementById('detailModal'));
     myModal.show();
@@ -348,6 +390,7 @@ function openDetailModal(docId) {
     document.getElementById('modalLoading').style.display = 'block';
     document.getElementById('modalContent').style.display = 'none';
     
+    // สร้าง URL สำหรับดึงข้อมูล
     const currentUrl = new URL(window.location.href);
     currentUrl.searchParams.set('ajax_get_detail', '1');
     currentUrl.searchParams.set('doc_id', docId);
@@ -356,6 +399,7 @@ function openDetailModal(docId) {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
+            // ใส่ข้อมูลลงใน Modal
             document.getElementById('d_title').innerText = data.doc.title;
             document.getElementById('d_code').innerText = data.doc.code;
             document.getElementById('d_views').innerText = data.doc.view_count;

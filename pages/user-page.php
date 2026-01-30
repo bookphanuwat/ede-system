@@ -4,32 +4,29 @@ if (session_status() === PHP_SESSION_NONE) {
     ini_set('session.cookie_httponly', 1);
     ini_set('session.cookie_secure', 1);
     session_start();
+    // หา Root Path อัตโนมัติสำหรับ Action Form
+    $rootPath = dirname(dirname($_SERVER['PHP_SELF']));
 }
 
-// 2. โหลด Config และ Database (ใช้ require_once เพื่อป้องกัน Error)
+// 2. โหลด Config และ Database
 if (!defined('SITE_URL')) {
-    // ปรับ Path ให้ถอยหลังกลับไปหาไฟล์ config ให้ถูกต้อง
     require_once __DIR__ . '/../../dv-config.php'; 
 }
 
 if (defined('DEV_PATH')) {
-    // ใช้ realpath เพื่อตรวจสอบ Path ที่แท้จริง และป้องกันการ Error จากการใช้ ../ ผิดพลาด
     $class_path = realpath(__DIR__ . '/../../classes/db.class.v2.php');
     $func_path  = realpath(__DIR__ . '/../../functions/global.php');
 
     if ($class_path && file_exists($class_path)) {
         require_once $class_path;
-    } else {
-        die("Error: ไม่พบไฟล์ Database Class ที่ตำแหน่ง: " . __DIR__ . '/../../classes/db.class.v2.php');
     }
-
     if ($func_path && file_exists($func_path)) {
         require_once $func_path;
     }
 }
 
-// 4. ตรวจสอบสิทธิ์ (Admin เท่านั้นถึงจะแก้คนอื่นได้)
-$is_admin = (isset($_SESSION['role']) && $_SESSION['role'] === 'Administrator');
+// 3. ตรวจสอบสิทธิ์
+$is_admin = (isset($_SESSION['role']) && stripos($_SESSION['role'], 'admin') !== false);
 $current_user_id = $_SESSION['user_id'] ?? 0;
 
 $user_data = null;
@@ -39,9 +36,11 @@ $target_id = null;
 
 // กำหนด ID ที่จะจัดการ
 if ($is_admin) {
+    // ถ้าเป็น Admin ให้รับ ID จาก URL (ถ้าไม่มีคือเพิ่มใหม่)
     $target_id = $_GET['id'] ?? null;
 } else {
-    $target_id = $current_user_id; // User ทั่วไปแก้ได้เฉพาะตัวเอง
+    // ✅ ถ้าเป็น User ทั่วไป บังคับให้แก้แค่ตัวเองเท่านั้น
+    $target_id = $current_user_id; 
 }
 
 // ดึงข้อมูล Roles (สำหรับ Admin เลือกสิทธิ์)
@@ -51,6 +50,7 @@ if ($is_admin && class_exists('CON')) {
 
 // ดึงข้อมูลผู้ใช้กรณีแก้ไข
 if ($target_id && class_exists('CON')) {
+    // ดึงข้อมูลตาม Target ID
     $user_result = CON::selectArrayDB([$target_id], "SELECT u.*, r.role_name FROM users u LEFT JOIN roles r ON u.role_id = r.role_id WHERE u.user_id = ?");
     if (!empty($user_result)) {
         $user_data = $user_result[0];
@@ -58,7 +58,11 @@ if ($target_id && class_exists('CON')) {
     }
 }
 
+// ตั้งหัวข้อหน้าเว็บ
 $page_header = $is_edit ? "แก้ไขข้อมูลผู้ใช้งาน" : "เพิ่มผู้ใช้งานใหม่";
+if (!$is_admin && $is_edit) {
+    $page_header = "แก้ไขข้อมูลส่วนตัว"; // เปลี่ยนชื่อให้ดูดีสำหรับ User ทั่วไป
+}
 ?>
 
 <!DOCTYPE html>
@@ -98,7 +102,9 @@ $page_header = $is_edit ? "แก้ไขข้อมูลผู้ใช้�
                 </div>
             <?php endif; ?>
 
-            <form action="../api/save_user.php" method="POST"> <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
+            <form action="<?php echo $rootPath; ?>/api/save_user.php" method="POST">
+                <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
+                
                 <?php if ($is_edit): ?>
                     <input type="hidden" name="user_id" value="<?php echo $user_data['user_id']; ?>">
                 <?php endif; ?>
@@ -119,6 +125,9 @@ $page_header = $is_edit ? "แก้ไขข้อมูลผู้ใช้�
                         <input type="password" name="password" class="form-control custom-input" 
                                placeholder="<?php echo $is_edit ? 'กรอกเฉพาะเมื่อต้องการเปลี่ยนใหม่' : 'ระบุรหัสผ่าน (12 ตัวขึ้นไป)'; ?>"
                                minlength="12" <?php echo $is_edit ? '' : 'required'; ?>>
+                        <?php if($is_edit): ?>
+                            <small class="text-muted">ระบุรหัสผ่าน (12 ตัวขึ้นไป โดยมีตัวอักษรอยู่ด้วย)</small>
+                        <?php endif; ?>
                     </div>
                 </div>
 
@@ -150,7 +159,10 @@ $page_header = $is_edit ? "แก้ไขข้อมูลผู้ใช้�
                                 <?php endforeach; ?>
                             </select>
                         <?php else: ?>
-                            <input type="text" class="form-control-plaintext px-3 border rounded bg-light" value="<?php echo htmlspecialchars($user_data['role_name'] ?? 'User'); ?>" readonly>
+                            <input type="text" class="form-control-plaintext px-3 border rounded bg-light" 
+                                   value="<?php echo htmlspecialchars($user_data['role_name'] ?? 'User'); ?>" readonly>
+                            
+                            <input type="hidden" name="role_id" value="<?php echo $user_data['role_id'] ?? ''; ?>">
                         <?php endif; ?>
                     </div>
                 </div>
