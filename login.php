@@ -101,7 +101,7 @@ if (empty($_SESSION['csrf_token'])) {
         </div>
 
         <div class="mt-4 pt-3 border-top">
-            <small class="text-muted">© 2025 EDE System</small>
+            <small class="text-muted">© <?php echo date("Y"); ?> EDE System</small>
         </div>
     </div>
 
