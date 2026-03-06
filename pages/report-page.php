@@ -70,9 +70,7 @@
             พบข้อมูลทั้งหมด <span id="totalCount" class="fw-bold text-dark">0</span> รายการ
         </div>
         <div>
-            <button id="btnPrint" class="btn btn-outline-dark border-0 fw-bold rounded-pill px-4">
-                <i class="fas fa-print me-2"></i>พิมพ์
-            </button>
+  
             <button id="btnExport" class="btn btn-success border-0 fw-bold rounded-pill px-4 ms-2" style="background-color: #1D6F42;">
                 <i class="fas fa-file-excel me-2"></i>Export Excel
             </button>
