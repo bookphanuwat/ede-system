@@ -1,17 +1,47 @@
 <?php
-    session_start();
-    error_reporting( E_ALL );
-    //error_reporting( E_ERROR | E_WARNING | E_PARSE );
+    // 1. สร้างรหัสลับ (Nonce) สำหรับการโหลดหน้านี้โดยเฉพาะ
+    $nonce = base64_encode(random_bytes(16));
 
-    // ตรวจสอบการ login
-    // if ( !isset( $_SESSION['user_id'] ) && $_GET['dev'] != 'liffscan' ) {
-    //     header( "Location: login.php" );
-    //     exit;
-    // }
+    // 2. ตั้งค่า Security Header ผ่าน PHP (ใช้ Nonce แทน unsafe-inline)
+    // สังเกต: เราลบ 'unsafe-inline' และ 'unsafe-eval' ออกแล้ว
+    // สังเกต: เราลบ https://cdn.jsdelivr.net ออก แล้วใช้ 'self' สำหรับไฟล์ Local
+header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$nonce}' https://static.line-scdn.net; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com; img-src 'self' data: https://api.qrserver.com https://*.line-scdn.net; connect-src 'self' https://*.line.me https://*.line-scdn.net; frame-ancestors 'self'; base-uri 'self'; form-action 'self'; object-src 'none';");    
+    // Header ความปลอดภัยอื่นๆ
+    header("X-Frame-Options: SAMEORIGIN");
+    header("X-Content-Type-Options: nosniff");
+    header("Referrer-Policy: strict-origin-when-cross-origin");
+
+    // การตั้งค่า Session เดิม
+    ini_set('session.cookie_httponly', 1); 
+    ini_set('session.cookie_secure', 1);   
+    ini_set('session.use_only_cookies', 1); 
+    session_start();
+    ob_start();
+
+
+    
+    ini_set('display_errors', 1); 
+    ini_set('display_startup_errors', 1);
+    error_reporting(E_ALL); 
+
+    // ------------------------------------------------------------------------
+    // [แก้ไข] ส่วนตรวจสอบการ Login (เปิดใช้งานและปรับปรุงโค้ด)
+    // ------------------------------------------------------------------------
+    // ตรวจสอบว่ามี user_id ใน Session หรือไม่ 
+    // และยกเว้นการตรวจสอบถ้าเข้ามาผ่านโหมด 'liffscan' (ถ้าจำเป็นต้องเปิดสาธารณะ)
+    $dev_mode = isset($_GET['dev']) ? $_GET['dev'] : '';
+    
+    if ( !isset( $_SESSION['user_id'] ) && $dev_mode !== 'liffscan' ) {
+        header( "Location: login.php" );
+        exit;
+    }
+    // ------------------------------------------------------------------------
+
     require realpath( '../dv-config.php' );
     require DEV_PATH . '/classes/db.class.v2.php';
     require DEV_PATH . '/functions/global.php';
-    // require_once realpath('config/db.php');
+
+    // ... ส่วนที่เหลือคงเดิม ...
 
     // สำหรับ dev parameter (อนุญาตเฉพาะ alphanumeric)
     $GET_DEV = sanitizeGetParam( 'dev', 'alphanumeric', '', 50 );
@@ -40,11 +70,6 @@
     <!-- <link rel="stylesheet" href="<?php echo ASSET_PATH; ?>/fonts/maledpan/maledpan.css">
     <link rel="stylesheet" href="<?php echo ASSET_PATH; ?>/fonts/chatthai/chatthai.css"> -->
     <link href="<?php echo SITE_URL;?>/css/main.min.css" rel="stylesheet">
-    <script src="https://unpkg.com/vconsole@latest/dist/vconsole.min.js"></script>
-<script>
-  // VConsole will be exported to `window.VConsole` by default.
-  var vConsole = new window.VConsole();
-</script>
 </head>
 
 <body>
@@ -108,6 +133,10 @@
                         $pageFile = 'pages/liff-scan.php';
                         $jsReq = 'js/liffscan.min.js';
                         break;
+                    
+                    case 'user':
+                        $pageFile = 'pages/user-page.php';
+                        break;
 
                     default:
                         $pageFile = 'pages/page-not-found.php';
@@ -123,27 +152,24 @@
     </div><!-- .d-flex -->
 
     <!-- Core JavaScript -->
-    <script>
+    <script nonce="<?php echo $nonce; ?>">
         const site_url = '<?php echo SITE_URL; ?>';
     </script>
-    <!-- <script src="<?php echo ASSET_PATH; ?>/jquery/dist/jquery.min.js"></script> -->
-    <script src="<?php echo ASSET_PATH; ?>/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="<?php echo ASSET_PATH; ?>/sweetalert2/dist/sweetalert2.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
-    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 
+    <script src="<?php echo ASSET_PATH; ?>/bootstrap/dist/js/bootstrap.bundle.min.js" nonce="<?php echo $nonce; ?>"></script>
+    <script src="<?php echo ASSET_PATH; ?>/sweetalert2/dist/sweetalert2.min.js" nonce="<?php echo $nonce; ?>"></script>
+    
+    <script src="<?php echo SITE_URL; ?>/js/qrcode.min.js" nonce="<?php echo $nonce; ?>"></script>
+    <script src="https://static.line-scdn.net/liff/edge/versions/2.22.3/sdk.js" nonce="<?php echo $nonce; ?>"></script>
+    <script src="<?php echo SITE_URL; ?>/js/Sortable.min.js" nonce="<?php echo $nonce; ?>"></script>
 
-    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+   <script src="<?php echo SITE_URL; ?>/js/global.min.js?v=<?php echo filemtime( 'js/global.min.js' ); ?>" nonce="<?php echo $nonce; ?>"></script>
 
-    <!-- Global Scripts -->
-    <script src="<?php echo SITE_URL; ?>/js/global.min.js?v=<?php echo filemtime( 'js/global.min.js' ); ?>"></script>
-
-
-    <script async>
-    'use strict';
-    <?php echo( isset( $jsExt ) ) ? $jsExt : ''; ?>
-    <?php ( isset( $jsReq ) ) ? require $jsReq : ''; ?>
-  </script>
+    <script async nonce="<?php echo $nonce; ?>">
+        'use strict';
+        <?php echo( isset( $jsExt ) ) ? $jsExt : ''; ?>
+        <?php ( isset( $jsReq ) ) ? require $jsReq : ''; ?>
+    </script>
 
 </body>
 </html>

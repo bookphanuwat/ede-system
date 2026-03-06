@@ -1,19 +1,23 @@
 <?php
-    $page_title   = "ประวัติการทำงานของคุณ";
-    $header_class = "header-dashboard";
-    include 'includes/topbar.php';
+    // ตั้งค่าหัวข้อหน้าเว็บ
+    $page_title   = "ประวัติการสแกน/อัปเดตล่าสุด";
+    $header_class = "header-scan-history";
+    
+    // เรียกใช้ Topbar (ซึ่งควรมีการ session_start() และเชื่อมต่อฐานข้อมูลมาแล้ว)
+    include 'includes/topbar.php'; 
 
     // ---------------------------------------------------------
-    // ส่วนที่ 1: AJAX Handler สำหรับดึงข้อมูลรายละเอียด + Timeline (JSON)
+    // ส่วนที่ 1: AJAX Handler (สำหรับดูรายละเอียดใน Modal)
     // ---------------------------------------------------------
     if (isset($_GET['ajax_get_detail']) && isset($_GET['doc_id'])) {
-        while (ob_get_level()) { ob_end_clean(); } // Clean buffer
+        // เคลียร์ Output Buffer เพื่อป้องกัน HTML ขยะติดไปกับ JSON
+        while (ob_get_level()) { ob_end_clean(); } 
         header('Content-Type: application/json');
 
         $doc_id = $_GET['doc_id'];
         $response = ['success' => false];
 
-        // 1. ดึงรายละเอียดเอกสาร (Document Details)
+        // 1.1 ดึงรายละเอียดเอกสาร
         $sql_doc = "SELECT d.*, dt.type_name 
                     FROM documents d 
                     LEFT JOIN document_type dt ON d.type_id = dt.type_id 
@@ -28,13 +32,12 @@
                 'type' => $d['type_name'] ?? '-',
                 'status' => $d['current_status'],
                 'created_at' => date('d/m/Y H:i', strtotime($d['created_at'])),
-                'sender' => $d['sender'] ?? '-',
-                'receiver' => $d['receiver'] ?? '-',
+                'sender' => $d['sender_name'] ?? '-',
+                'receiver' => $d['receiver_name'] ?? '-',
                 'view_count' => number_format($d['view_count'] ?? 0)
             ];
 
-            // 2. ดึงประวัติ Timeline (History)
-            // ใช้ l.* ไว้หลังเพื่อให้ค่าหลักยึดตาม Log
+            // 1.2 ดึงประวัติ Timeline (ส่วนนี้ให้เห็นทั้งหมด เพื่อให้ User รู้ความเคลื่อนไหวต่อเนื่องของเอกสารนั้น)
             $sql_hist = "SELECT u.*, l.* FROM document_status_log l 
                          LEFT JOIN users u ON l.action_by = u.user_id 
                          WHERE l.document_id = ? 
@@ -45,83 +48,23 @@
             if (count($histData) > 0) {
                 foreach ($histData as $h) {
                     $h_time = date('d/m/Y H:i', strtotime($h['action_time']));
+                    // พยายามหาชื่อคนทำรายการ (ชื่อ Snapshot > ชื่อจริง > Username > ID)
+                    $found_name = $h['actor_name_snapshot'] ?: ($h['fullname'] ?: ($h['username'] ?: "User ID: " . $h['action_by']));
+                    $img_src = $h['actor_pic_snapshot'] ?: '';
                     
-                    // ---------------------------------------------------------
-                    // Identity Detection (ระบบค้นหาชื่อแบบละเอียด)
-                    // ---------------------------------------------------------
-                    $found_name = '';
-
-                    // 1. ลองหาจาก Snapshot ใน Log ก่อน (แม่นยำที่สุด ณ เวลาที่บันทึก)
-                    if (!empty($h['actor_name_snapshot'])) {
-                        $found_name = $h['actor_name_snapshot'];
-                    }
-                    // 2. ถ้าไม่มี Snapshot ให้ลองหาจากคอลัมน์ต่างๆ ที่ Join มาได้
-                    elseif (!empty($h['first_name'])) {
-                        $found_name = $h['first_name'] . ' ' . ($h['last_name'] ?? '');
-                    } elseif (!empty($h['name'])) {
-                        $found_name = $h['name'];
-                    } elseif (!empty($h['username'])) {
-                        $found_name = $h['username'];
-                    } elseif (!empty($h['fullname'])) { // เผื่อใช้ชื่อ fullname
-                        $found_name = $h['fullname'];
-                    } elseif (!empty($h['eng_name'])) { // เผื่อใช้ชื่อภาษาอังกฤษ
-                        $found_name = $h['eng_name'];
-                    }
-                    
-                    // 3. ถ้ายังไม่เจอ ลองเช็คว่าเป็นตัวเองหรือไม่ (ดึงจาก Session)
-                    if (empty($found_name) && isset($_SESSION['user_id']) && isset($h['action_by'])) {
-                        if ($h['action_by'] == $_SESSION['user_id']) {
-                            // ลองหาชื่อใน Session
-                            if (!empty($_SESSION['user_name'])) $found_name = $_SESSION['user_name'] . " (คุณ)";
-                            elseif (!empty($_SESSION['name'])) $found_name = $_SESSION['name'] . " (คุณ)";
-                            elseif (!empty($_SESSION['first_name'])) $found_name = $_SESSION['first_name'] . " (คุณ)";
-                        }
-                    }
-
-                    // 4. กำหนดค่าที่จะแสดงผลสุดท้าย
-                    if (!empty($found_name)) {
-                        $user_name = $found_name;
-                    } else {
-                        // กรณีหาไม่เจอจริงๆ
-                        $uid = $h['action_by'] ?? '';
-                        if (empty($uid) || $uid == 0) {
-                            $user_name = "ไม่ระบุ (System)";
-                        } else {
-                            $user_name = "User ID: $uid"; 
-                        }
-                    }
-                    
-                    // Image Check
-                    $img_src = '';
-                    // 1. ลองหาจาก Snapshot รูปภาพใน Log ก่อน
-                    if (!empty($h['actor_pic_snapshot'])) {
-                        $img_src = $h['actor_pic_snapshot'];
-                    }
-                    // 2. ถ้าไม่มี Snapshot ให้ลองหาจากคอลัมน์ต่างๆ
-                    elseif (!empty($h['profile_img'])) $img_src = $h['profile_img'];
-                    elseif (!empty($h['image'])) $img_src = $h['image'];
-                    elseif (!empty($h['avatar'])) $img_src = $h['avatar']; // เพิ่ม avatar
-                    
-                    // Icon/Image HTML
-                    // ปรับปรุง: ลบ file_exists ออกเพื่อให้แสดงผลรูปได้แม้ Path ใน Server จะหาไม่เจอ
+                    // Logic แสดงรูป Avatar ใน Timeline
                     if (!empty($img_src)) {
-                        $user_icon = "
-                        <div class='me-2 position-relative' style='width:35px; height:35px;'>
-                            <img src='$img_src' class='rounded-circle border w-100 h-100' style='object-fit:cover;' 
-                                 onerror=\"this.style.display='none'; this.nextElementSibling.style.display='flex';\">
-                            <div class='rounded-circle bg-light align-items-center justify-content-center border w-100 h-100 position-absolute top-0 start-0' style='display:none;'>
-                                <i class='fas fa-user text-secondary'></i>
-                            </div>
-                        </div>";
+                        $user_icon = "<img src='$img_src' class='rounded-circle border me-2 user-avatar' style='width:35px; height:35px; object-fit:cover;'>";
                     } else {
-                        $user_icon = "<div class='rounded-circle bg-light d-flex align-items-center justify-content-center me-2 border' style='width:35px; height:35px;'><i class='fas fa-user text-secondary'></i></div>";
+                        $user_icon = "<div class='rounded-circle bg-primary bg-opacity-10 d-flex align-items-center justify-content-center me-2 border border-primary border-opacity-25' style='width:35px; height:35px;'>
+                                        <i class='fas fa-user-tie text-primary'></i>
+                                      </div>";
                     }
 
-                    $h_status = $h['status'] ?? '-';
-                    $h_ip     = $h['ip_address'] ?? '-';
-                    $h_device = $h['device_info'] ?? '-'; // เพิ่มตัวแปร device_info
+                    $h_status = htmlspecialchars($h['status'] ?? '-', ENT_QUOTES, 'UTF-8');
+                    $h_ip     = htmlspecialchars($h['ip_address'] ?? '-', ENT_QUOTES, 'UTF-8');
+                    $h_device = htmlspecialchars($h['device_info'] ?? '-', ENT_QUOTES, 'UTF-8');
 
-                    // สร้าง List Item
                     $html .= "
                     <li class='list-group-item px-0 border-bottom-0'>
                         <div class='d-flex align-items-start'>
@@ -133,12 +76,12 @@
                                 <div class='d-flex align-items-center mb-1'>
                                     $user_icon
                                     <div>
-                                        <span class='fw-bold text-dark d-block' style='line-height:1.2;'>$user_name</span>
+                                        <span class='fw-bold text-dark d-block' style='line-height:1.2;'>$found_name</span>
                                         <span class='badge bg-light text-secondary border rounded-pill small'>$h_status</span>
                                     </div>
                                 </div>
                                 <div class='small text-muted ps-5 ms-1'>
-                                    <span class='me-2'><i class='fas fa-network-wired me-1'></i> IP: $h_ip</span>
+                                    <span class='me-2'><i class='fas fa-network-wired me-1'></i> $h_ip</span>
                                     <span><i class='fas fa-mobile-alt me-1'></i> $h_device</span>
                                 </div>
                             </div>
@@ -159,160 +102,295 @@
     }
 
     // ---------------------------------------------------------
-    // Main Page Logic
+    // ส่วนที่ 2: Main Page Logic (การดึงข้อมูลลงตาราง)
     // ---------------------------------------------------------
     
-    // Helper Function: Badge สถานะ (เหมือนตัวอย่าง)
+    // ฟังก์ชันสร้าง Badge สถานะ
     function getStatusBadge($status) {
         switch ($status) {
-            case 'Received': return '<span class="badge rounded-pill bg-success">สำเร็จ/ได้รับแล้ว</span>';
-            case 'Registered': return '<span class="badge rounded-pill bg-info text-dark">ลงทะเบียนใหม่</span>';
-            case 'Sent': return '<span class="badge rounded-pill bg-warning text-dark">กำลังนำส่ง</span>';
-            case 'Late': return '<span class="badge rounded-pill bg-danger">ล่าช้า</span>';
-            default: return '<span class="badge rounded-pill bg-secondary">' . htmlspecialchars($status) . '</span>';
+            case 'Received': return '<span class="badge rounded-pill bg-success px-3">สำเร็จ/ได้รับแล้ว</span>';
+            case 'Registered': return '<span class="badge rounded-pill bg-info text-dark px-3">ลงทะเบียนใหม่</span>';
+            case 'Sent': return '<span class="badge rounded-pill bg-warning text-dark px-3">กำลังนำส่ง</span>';
+            case 'Late': return '<span class="badge rounded-pill bg-danger px-3">ล่าช้า</span>';
+            case 'เปิดอ่าน': case 'Viewed': 
+                return '<span class="badge rounded-pill bg-primary px-3 shadow-sm" style="background: linear-gradient(45deg, #42a5f5, #1e88e5);"><i class="far fa-eye me-1"></i>สแกนเปิดอ่าน</span>';
+            default: return '<span class="badge rounded-pill bg-secondary px-3">' . htmlspecialchars($status) . '</span>';
         }
     }
 
-    // Query User's History
-    $sql = "SELECT l.*, d.title, d.document_code, d.current_status 
-            FROM document_status_log l 
-            JOIN documents d ON l.document_id = d.document_id 
-            WHERE l.action_by = ? 
-            ORDER BY l.action_time DESC 
-            LIMIT 50";
-            
-    $history = CON::selectArrayDB([$_SESSION['user_id']], $sql) ?? [];
+    // --- [START] กำหนด Logic SQL แยกตามสิทธิ์ ---
+    
+    // ดึงค่า Role และ User ID จาก Session (ตั้งค่า Default ป้องกัน Error)
+    $current_role = $_SESSION['role'] ?? 'User';
+    $current_user_id = $_SESSION['user_id'] ?? 0;
+    
+    $sql = "";
+    $params = [];
 
-    // Generate Rows
+    if ($current_role === 'Administrator') {
+        // === กรณี ADMIN ===
+        // เห็นภาพรวมทั้งหมด: ดึง Log ล่าสุดของ "ทุกเอกสาร" ในระบบ ไม่ว่าใครทำ
+        $sql = "SELECT l.*, d.title, d.document_code, d.current_status, 
+                       u.fullname, u.username, 
+                       l.actor_name_snapshot, l.actor_pic_snapshot
+                FROM document_status_log l 
+                JOIN documents d ON l.document_id = d.document_id 
+                LEFT JOIN users u ON l.action_by = u.user_id 
+                WHERE l.log_id IN (
+                    SELECT MAX(log_id) 
+                    FROM document_status_log 
+                    GROUP BY document_id
+                )
+                ORDER BY l.action_time DESC 
+                LIMIT 50";
+        // Admin ไม่ต้องใช้ parameter เพิ่ม
+    } else {
+        // === กรณี USER ทั่วไป ===
+        // เห็นเฉพาะของตัวเอง: ดึง Log ล่าสุด "ที่ User คนนี้ (action_by) เป็นคนทำ"
+        $sql = "SELECT l.*, d.title, d.document_code, d.current_status, 
+                       u.fullname, u.username, 
+                       l.actor_name_snapshot, l.actor_pic_snapshot
+                FROM document_status_log l 
+                JOIN documents d ON l.document_id = d.document_id 
+                LEFT JOIN users u ON l.action_by = u.user_id 
+                WHERE l.log_id IN (
+                    SELECT MAX(log_id) 
+                    FROM document_status_log 
+                    WHERE action_by = ? 
+                    GROUP BY document_id
+                )
+                ORDER BY l.action_time DESC 
+                LIMIT 50";
+        // ส่ง User ID เข้าไปกรองใน SQL
+        $params = [$current_user_id]; 
+    }
+            
+    // ดึงข้อมูลจากฐานข้อมูล
+    $history = CON::selectArrayDB($params, $sql) ?? [];
+
+    // --- [END] จบส่วนกำหนด Logic ---
+
+    // เตรียม HTML สำหรับแสดงในตาราง
     $historyRows = '';
     if (count($history) > 0) {
         foreach ($history as $row) {
-            $time = date('d/m/Y H:i', strtotime($row['action_time']));
-            $code = $row['document_code'] ?? '';
-            $title = $row['title'] ?? '';
+            $timeObj = strtotime($row['action_time']);
+            $dateStr = date('d/m/y', $timeObj);
+            $timeStr = date('H:i', $timeObj);
+            
+            $code = htmlspecialchars($row['document_code'] ?? '', ENT_QUOTES, 'UTF-8');
+            $title = htmlspecialchars($row['title'] ?? '', ENT_QUOTES, 'UTF-8');
             $status = $row['status'] ?? '-';
-            $ip = $row['ip_address'] ?? '';
-            $device = $row['device_info'] ?? '-'; // เพิ่ม device_info
+            $ip = htmlspecialchars($row['ip_address'] ?? '-', ENT_QUOTES, 'UTF-8');
+            $device = htmlspecialchars($row['device_info'] ?? 'Unknown', ENT_QUOTES, 'UTF-8');
             $docId = $row['document_id'];
 
-            // Style Link: ใช้คลาส doc-link สีฟ้าเหมือน Dashboard
-            $codeLink = "<a href='javascript:void(0)' onclick='openDetailModal($docId)' class='doc-link shadow-sm'><i class='fas fa-search me-1'></i>$code</a>";
+            // ไฮไลท์แถวถ้าสถานะคือ "เปิดอ่าน"
+            $isViewed = in_array($status, ['เปิดอ่าน', 'Viewed']);
+            $rowClass = $isViewed ? 'bg-soft-primary' : ''; 
             
-            // ใช้ Badge สวยๆ
+            // ไอคอนแสดงประเภท
+            $iconType = $isViewed 
+                ? '<div class="icon-circle bg-white text-primary shadow-sm"><i class="fas fa-qrcode"></i></div>' 
+                : '<div class="icon-circle bg-light text-secondary"><i class="fas fa-file-alt"></i></div>';
+
+            // จัดการรูปภาพผู้ใช้งาน
+            $actorName = $row['actor_name_snapshot'] ?: ($row['fullname'] ?: ($row['username'] ?: 'Unknown'));
+            $actorImgUrl = $row['actor_pic_snapshot'];
+
+            if (!empty($actorImgUrl)) {
+                $userAvatarHtml = "<img src='$actorImgUrl' class='rounded-circle border w-100 h-100 shadow-sm user-avatar' style='object-fit:cover;'>";
+            } else {
+                $userAvatarHtml = "<div class='rounded-circle bg-white w-100 h-100 d-flex align-items-center justify-content-center border shadow-sm'>
+                                      <i class='fas fa-user-tie text-secondary' style='font-size: 1.2rem;'></i>
+                                   </div>";
+            }
+
+            $userDisplay = "
+            <div class='d-flex align-items-center'>
+                <div class='me-3' style='width:45px; height:45px; min-width:45px;'>
+                     $userAvatarHtml
+                </div>
+                <div class='text-dark fw-bold text-truncate' style='max-width: 160px; font-size: 1rem;'>$actorName</div>
+            </div>";
+
+            // ลิงก์รหัสเอกสารและชื่อเรื่อง
+            $codeLink = "<a href='#' class='doc-link shadow-sm btn-open-detail mb-2' data-id='$docId'><i class='fas fa-search me-1'></i>$code</a>";
+            $titleDisplay = "<div class='text-dark fw-bold text-wrap' style='font-size: 1.2rem; line-height:1.4;'>$title</div>";
+
             $statusBadge = getStatusBadge($status);
 
-            $historyRows .= "<tr>
-                <td class='ps-4 text-muted small'>$time</td>
-                <td>
-                    $codeLink
-                    <div class='mt-1 text-dark small'>$title</div>
+            $historyRows .= "<tr class='$rowClass'>
+                <td class='ps-4 align-middle'>
+                    <div class='d-flex align-items-center'>
+                        <div class='text-center me-3'>
+                            <span class='d-block fw-bold text-dark' style='font-size:1.1rem; line-height:1;'>$timeStr</span>
+                            <small class='text-muted' style='font-size:0.8rem;'>$dateStr</small>
+                        </div>
+                        $iconType
+                    </div>
                 </td>
-                <td>$statusBadge</td>
-                <td class='text-muted small'>
-                    <div><i class='fas fa-desktop me-1'></i>$ip</div>
-                    <div class='text-secondary' style='font-size: 0.75rem;'><i class='fas fa-info-circle me-1'></i>$device</div>
+                <td class='align-middle py-3'>
+                    <div class='d-flex flex-column align-items-start'>
+                        $codeLink
+                        $titleDisplay
+                    </div>
+                </td>
+                <td class='align-middle'>$userDisplay</td>
+                <td class='align-middle'>$statusBadge</td>
+                <td class='text-muted small align-middle'>
+                    <div class='d-flex align-items-center' title='$ip'>
+                        <i class='fas fa-mobile-alt me-2'></i> 
+                        <span class='text-truncate' style='max-width: 120px;'>$device</span>
+                    </div>
                 </td>
             </tr>";
         }
     } else {
-        $historyRows = '<tr><td colspan="4" class="text-center py-5 text-muted">ยังไม่พบประวัติการทำงานของคุณ</td></tr>';
+        $historyRows = '<tr><td colspan="5" class="text-center py-5 text-muted"><i class="fas fa-history fa-3x mb-3 opacity-25"></i><br>ยังไม่พบประวัติการทำงานในระบบ</td></tr>';
     }
 ?>
 
 <style>
-    /* สไตล์ปุ่มเลขเอกสารเหมือน Dashboard */
+    /* CSS เพิ่มเติมเฉพาะหน้านี้ */
     .doc-link {
         color: #29B6F6; font-weight: bold; text-decoration: none;
-        background: rgba(41, 182, 246, 0.1); padding: 5px 12px; border-radius: 20px; transition: 0.2s; display: inline-block;
+        background: rgba(41, 182, 246, 0.1); padding: 5px 15px; border-radius: 20px; 
+        transition: 0.2s; display: inline-block; font-size: 1rem;
     }
-    .doc-link:hover { background: #29B6F6; color: white; }
+    .doc-link:hover { background: #29B6F6; color: white; transform: translateY(-1px); }
+
+    .bg-soft-primary { background-color: #f0f7ff !important; }
+    .bg-soft-primary:hover { background-color: #e1effe !important; }
     
-    .view-count-badge { font-size: 0.85rem; color: #555; background: #eee; padding: 5px 10px; border-radius: 15px; display: inline-flex; align-items: center; gap: 5px; }
+    .icon-circle {
+        width: 40px; height: 40px;
+        border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 1.2rem;
+    }
+    
+    .table > :not(caption) > * > * { padding: 1.2rem 1rem; border-bottom-color: #f1f1f1; }
+    .table tbody tr:hover { background-color: #fafafa; }
+    
+    .view-count-badge { font-size: 0.9rem; color: #555; background: #eee; padding: 5px 15px; border-radius: 15px; display: inline-flex; align-items: center; gap: 5px; }
 </style>
 
 <div class="page-content">
     
-    <h5 class="mb-4 fw-bold text-secondary">**🕒 รายการที่คุณเคยสแกน/อัปเดต**</h5>
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h5 class="fw-bold text-dark mb-1"><i class="fas fa-history me-2 text-primary"></i>ประวัติการสแกน/อัปเดต (ล่าสุด)</h5>
+            <small class="text-muted" style="font-size: 0.9rem;">
+                <?php if($current_role === 'Administrator') echo 'แสดงสถานะล่าสุดของเอกสารทั้งหมดในระบบ (Admin View)'; else echo 'แสดงรายการที่คุณดำเนินการล่าสุด'; ?>
+                | คลิกที่ <span class="text-primary fw-bold">รหัสเอกสารสีฟ้า</span> เพื่อดูรายละเอียด
+            </small>
+        </div>
+        <button id="btnReload" class="btn btn-light border rounded-pill shadow-sm text-secondary px-4 py-2">
+            <i class="fas fa-sync-alt me-1"></i> รีเฟรช
+        </button>
+    </div>
 
-    <div class="table-responsive rounded-4 shadow-sm border">
-        <table class="table table-hover mb-0 align-middle">
-            <thead class="table-light">
-                <tr>
-                    <th class="py-3 ps-4">เวลา</th>
-                    <th class="py-3">เอกสาร (กดเพื่อดูรายละเอียด)</th>
-                    <th class="py-3">สถานะตอนสแกน</th>
-                    <th class="py-3">อุปกรณ์</th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php echo $historyRows; ?>
-            </tbody>
-        </table>
+    <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+        <div class="table-responsive">
+            <table class="table mb-0 align-middle">
+                <thead class="bg-light">
+                    <tr>
+                        <th class="py-3 ps-4 text-secondary" style="width: 15%; font-size: 1rem;">เวลา / ประเภท</th>
+                        <th class="py-3 text-secondary" style="width: 35%; font-size: 1rem;">เอกสาร</th>
+                        <th class="py-3 text-secondary" style="width: 20%; font-size: 1rem;">ผู้ดำเนินการล่าสุด</th>
+                        <th class="py-3 text-secondary" style="width: 15%; font-size: 1rem;">สถานะล่าสุด</th>
+                        <th class="py-3 text-secondary" style="width: 15%; font-size: 1rem;">อุปกรณ์</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php echo $historyRows; ?>
+                </tbody>
+            </table>
+        </div>
     </div>
 </div>
 
-<!-- Modal รายละเอียดเอกสาร (Dashboard Style) -->
 <div class="modal fade" id="detailModal" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content rounded-4 border-0 shadow-lg">
-            <div class="modal-header border-0 bg-primary text-white rounded-top-4">
-                <h5 class="modal-title fw-bold"><i class="fas fa-file-alt me-2"></i>รายละเอียดเอกสาร</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            <div class="modal-header border-0 bg-white rounded-top-4 pb-0">
+                <h5 class="modal-title fw-bold text-dark ps-2 pt-2" style="font-size: 1.3rem;">รายละเอียดและประวัติทั้งหมด</h5>
+                <button type="button" class="btn-close mt-2 me-2" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body p-4 bg-light">
-                
-                <!-- Loading State -->
+            <div class="modal-body p-4 pt-2">
                 <div id="modalLoading" class="text-center py-5">
                     <div class="spinner-border text-primary" role="status"></div>
-                    <div class="mt-2 text-muted">กำลังโหลดข้อมูล...</div>
                 </div>
-
-                <!-- Content State -->
                 <div id="modalContent" style="display:none;">
-                    <div class="card border-0 shadow-sm rounded-4 mb-4">
-                        <div class="card-body">
+                    <div class="card border bg-light rounded-4 mb-4 mt-3">
+                        <div class="card-body p-4">
                             <div class="d-flex justify-content-between align-items-start mb-3">
-                                <h4 id="d_title" class="fw-bold text-primary mb-0">...</h4>
-                                <span class="view-count-badge shadow-sm">
-                                    <i class="far fa-eye text-primary"></i> <strong id="d_views" class="text-dark ms-1">0</strong>
-                                </span>
+                                <div>
+                                    <span id="d_code" class="badge bg-dark mb-2" style="font-size: 1rem;">...</span>
+                                    <h4 id="d_title" class="fw-bold text-primary mb-0" style="font-size: 1.4rem;">...</h4>
+                                </div>
+                                <div class="text-end">
+                                    <span class="view-count-badge shadow-sm bg-white">
+                                        <i class="far fa-eye text-primary"></i> <strong id="d_views" class="text-dark ms-1">0</strong>
+                                    </span>
+                                </div>
                             </div>
-
-                            <div class="row g-3">
-                                <div class="col-md-6"><small class="text-muted d-block">เลขทะเบียน</small><strong id="d_code" class="fs-5 text-dark">...</strong></div>
-                                <div class="col-md-6"><small class="text-muted d-block">สถานะปัจจุบัน</small><span id="d_status" class="badge bg-secondary">...</span></div>
-                                <div class="col-md-6"><small class="text-muted d-block">ประเภท</small><span id="d_type" class="text-dark">...</span></div>
-                                <div class="col-md-6"><small class="text-muted d-block">วันที่สร้าง</small><span id="d_date" class="text-dark">...</span></div>
-                                <div class="col-md-6"><small class="text-muted d-block">ผู้ส่ง</small><span id="d_sender" class="text-dark">...</span></div>
-                                <div class="col-md-6"><small class="text-muted d-block">ผู้รับ</small><span id="d_receiver" class="text-dark">...</span></div>
+                            <div class="row g-2 text-muted" style="font-size: 0.95rem;">
+                                <div class="col-6">ประเภท: <span id="d_type" class="text-dark fw-bold">...</span></div>
+                                <div class="col-6">วันที่สร้าง: <span id="d_date" class="text-dark fw-bold">...</span></div>
+                                <div class="col-6">ผู้ส่ง: <span id="d_sender" class="text-dark fw-bold">...</span></div>
+                                <div class="col-6">ผู้รับ: <span id="d_receiver" class="text-dark fw-bold">...</span></div>
                             </div>
                         </div>
                     </div>
-
-                    <h6 class="fw-bold text-secondary ps-2 border-start border-4 border-primary mb-3">ประวัติการดำเนินงาน (Timeline)</h6>
-                    <div id="d_timeline" class="timeline ms-1">
-                        <!-- Timeline Content will be loaded here -->
-                    </div>
+                    <h6 class="fw-bold text-secondary mb-3 ps-1" style="font-size: 1.1rem;">Timeline การทำงาน (ทั้งหมด)</h6>
+                    <div id="d_timeline" class="timeline ms-1"></div>
                 </div>
-            </div>
-            <div class="modal-footer border-0 bg-light">
-                <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">ปิดหน้าต่าง</button>
             </div>
         </div>
     </div>
 </div>
 
-<script>
+<script nonce="<?php echo $nonce ?? ''; ?>">
+document.addEventListener('DOMContentLoaded', function() {
+    
+    // 1. จัดการกรณีรูปโหลดไม่ขึ้น (Image Error Handling)
+    document.addEventListener('error', function(e) {
+        if (e.target && e.target.tagName === 'IMG' && e.target.classList.contains('user-avatar')) {
+             // ใช้ Placeholder หากรูป LINE หมดอายุหรือโหลดไม่ได้
+             e.target.src = 'https://via.placeholder.com/45/f0f0f0/888888?text=USER'; 
+        }
+    }, true);
+
+    // 2. ปุ่ม Refresh
+    var btnReload = document.getElementById('btnReload');
+    if (btnReload) {
+        btnReload.addEventListener('click', function() {
+            window.location.reload();
+        });
+    }
+
+    // 3. คลิกปุ่มเพื่อเปิด Modal
+    document.body.addEventListener('click', function(e) {
+        const target = e.target.closest('.btn-open-detail');
+        if (target) {
+            e.preventDefault();
+            const docId = target.getAttribute('data-id');
+            openDetailModal(docId);
+        }
+    });
+});
+
+// ฟังก์ชันเรียกดูข้อมูลผ่าน AJAX
 function openDetailModal(docId) {
-    // 1. เปิด Modal
     var myModal = new bootstrap.Modal(document.getElementById('detailModal'));
     myModal.show();
     
-    // 2. แสดง Loading / ซ่อน Content
     document.getElementById('modalLoading').style.display = 'block';
     document.getElementById('modalContent').style.display = 'none';
     
-    // 3. เรียก AJAX
+    // สร้าง URL สำหรับดึงข้อมูล
     const currentUrl = new URL(window.location.href);
     currentUrl.searchParams.set('ajax_get_detail', '1');
     currentUrl.searchParams.set('doc_id', docId);
@@ -321,7 +399,7 @@ function openDetailModal(docId) {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            // ใส่ข้อมูลส่วนหัว (Details)
+            // ใส่ข้อมูลลงใน Modal
             document.getElementById('d_title').innerText = data.doc.title;
             document.getElementById('d_code').innerText = data.doc.code;
             document.getElementById('d_views').innerText = data.doc.view_count;
@@ -329,14 +407,8 @@ function openDetailModal(docId) {
             document.getElementById('d_date').innerText = data.doc.created_at;
             document.getElementById('d_sender').innerText = data.doc.sender;
             document.getElementById('d_receiver').innerText = data.doc.receiver;
-            
-            // ใส่ Badge Status
-            document.getElementById('d_status').innerHTML = `<span class='badge bg-info text-dark'>${data.doc.status}</span>`;
-
-            // ใส่ข้อมูล Timeline (HTML)
             document.getElementById('d_timeline').innerHTML = data.history_html;
 
-            // สลับการแสดงผล
             document.getElementById('modalLoading').style.display = 'none';
             document.getElementById('modalContent').style.display = 'block';
         } else {
@@ -345,9 +417,7 @@ function openDetailModal(docId) {
     })
     .catch(error => {
         console.error('Error:', error);
-        document.getElementById('d_timeline').innerHTML = '<div class="text-danger text-center">เกิดข้อผิดพลาดในการโหลดข้อมูล</div>';
-        document.getElementById('modalLoading').style.display = 'none';
-        document.getElementById('modalContent').style.display = 'block';
+        document.getElementById('d_timeline').innerHTML = '<div class="text-danger text-center">เกิดข้อผิดพลาด</div>';
     });
 }
 </script>

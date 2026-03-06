@@ -1,11 +1,31 @@
+<?php
+ini_set('session.cookie_httponly', 1);
+ini_set('session.cookie_secure', 1);
+session_start();
+
+// ------------------------------------------------------------------------
+// [เพิ่ม] ถ้ามี Session User อยู่แล้ว ให้ Redirect ไปหน้า Dashboard เลย
+// ------------------------------------------------------------------------
+if (isset($_SESSION['user_id'])) {
+    header("Location: index.php");
+    exit;
+}
+// ------------------------------------------------------------------------
+// ... ส่วนที่เหลือคงเดิม ...
+
+// 2. ปรับบรรทัด Content-Security-Policy โดยเพิ่ม frame-ancestors 'self';
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+?>
 <!DOCTYPE html>
 <html lang="th">
 <head>
     <meta charset="UTF-8">
     <title>เข้าสู่ระบบ / สมัครสมาชิก - EDE System</title>
     <!-- Bootstrap 5 -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-9ndCyUaIbzAi2FUVXJi0CjmCapSmO7SnpJef0486qhLnuZ2cdeRhO02iuK6FUUVM" crossorigin="anonymous">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet" integrity="sha384-3B6NwesSXE7YJlcLI9RpRqGf2p/EgVH8BgoKTaUrmKNDkHPStTQ3EyoYjCGXaOTS" crossorigin="anonymous">
     <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;600&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Prompt', sans-serif; background: linear-gradient(135deg, #29B6F6 0%, #7E57C2 100%); height: 100vh; display: flex; align-items: center; justify-content: center; }
@@ -39,6 +59,7 @@
         <div id="loginForm" class="form-section">
             <h5 class="mb-3 text-secondary">เข้าสู่ระบบ</h5>
             <form action="api/auth.php" method="POST">
+                <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
                 <input type="text" name="username" class="form-control" placeholder="ชื่อผู้ใช้งาน" required>
                 <input type="password" name="password" class="form-control" placeholder="รหัสผ่าน" required>
 
@@ -47,7 +68,7 @@
                 </button>
             </form>
             <div class="text-muted small">
-                ยังไม่มีบัญชี? <span onclick="toggleForm()" class="toggle-link">สมัครสมาชิก</span>
+                ยังไม่มีบัญชี? <span id="btnToRegister" class="toggle-link">สมัครสมาชิก</span>
             </div>
         </div>
 
@@ -55,43 +76,65 @@
         <div id="registerForm" class="form-section hidden">
             <h5 class="mb-3 text-info">สมัครสมาชิกใหม่</h5>
             <form action="api/public_register.php" method="POST">
+                <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
                 <input type="text" name="fullname" class="form-control" placeholder="ชื่อ-นามสกุล" required>
                 <input type="text" name="department" class="form-control" placeholder="แผนก/หน่วยงาน" required>
                 <input type="text" name="username" class="form-control" placeholder="กำหนดชื่อผู้ใช้งาน (Username)" required>
-                <input type="password" name="password" class="form-control" placeholder="กำหนดรหัสผ่าน" required>
-                <input type="password" name="confirm_password" class="form-control" placeholder="ยืนยันรหัสผ่าน" required>
+                <div class="mb-3 text-start">
+                <input type="password" name="password" class="form-control mb-1" placeholder="กำหนดรหัสผ่าน" minlength="12" required>
+                <small class="text-danger fw-bold" style="font-size: 0.85rem;">
+                    * รหัสผ่านต้องมีขั้นต่ำ 12 ตัว (มีตัวเลขและตัวอักษรผสมกัน)
+                </small>
+                 </div>
+
+<div class="mb-3">
+    <input type="password" name="confirm_password" class="form-control" placeholder="ยืนยันรหัสผ่านอีกครั้ง" minlength="12" required>
+</div>
 
                 <button type="submit" class="btn btn-action btn-register shadow-sm mb-3">
                     ลงทะเบียน <i class="fas fa-user-plus ms-2"></i>
                 </button>
             </form>
             <div class="text-muted small">
-                มีบัญชีอยู่แล้ว? <span onclick="toggleForm()" class="toggle-link" style="color: #29B6F6;">เข้าสู่ระบบ</span>
+                มีบัญชีอยู่แล้ว? <span id="btnToLogin" class="toggle-link" style="color: #29B6F6;">เข้าสู่ระบบ</span>
             </div>
         </div>
 
         <div class="mt-4 pt-3 border-top">
-            <small class="text-muted">© 2025 EDE System</small>
+            <small class="text-muted">© <?php echo date("Y"); ?> EDE System</small>
         </div>
     </div>
 
     <script>
-        // ฟังก์ชันสลับฟอร์ม
-        function toggleForm() {
-            const loginForm = document.getElementById('loginForm');
-            const registerForm = document.getElementById('registerForm');
+    document.addEventListener('DOMContentLoaded', function() {
+        const loginForm = document.getElementById('loginForm');
+        const registerForm = document.getElementById('registerForm');
+        const btnToRegister = document.getElementById('btnToRegister');
+        const btnToLogin = document.getElementById('btnToLogin');
 
+        // ฟังก์ชันสำหรับสลับฟอร์ม
+        function switchForm() {
             if (loginForm.classList.contains('hidden')) {
-                // แสดง Login
+                // ถ้า Login ซ่อนอยู่ -> ให้แสดง Login, ซ่อน Register
                 loginForm.classList.remove('hidden');
                 registerForm.classList.add('hidden');
             } else {
-                // แสดง Register
+                // ถ้า Login แสดงอยู่ -> ให้ซ่อน Login, แสดง Register
                 loginForm.classList.add('hidden');
                 registerForm.classList.remove('hidden');
             }
         }
-    </script>
+
+        // ผูกปุ่มกับการทำงาน
+        if (btnToRegister) {
+            btnToRegister.addEventListener('click', switchForm);
+        }
+        
+        if (btnToLogin) {
+            btnToLogin.addEventListener('click', switchForm);
+        }
+    });
+</script>
 
 </body>
 </html>

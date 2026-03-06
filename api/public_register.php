@@ -1,14 +1,36 @@
 <?php
+ini_set('session.cookie_httponly', 1);
+ini_set('session.cookie_secure', 1);
+session_start();
 require_once '../config/db.php';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $fullname = trim($_POST['fullname']);
-    $department = trim($_POST['department']);
-    $username = trim($_POST['username']);
-    $password = $_POST['password'];
+    // CSRF Protection: ตรวจสอบ Token
+    if (!isset($_POST['csrf_token']) || empty($_SESSION['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
+       // echo "<script>alert('❌ Security Check Failed (CSRF Token mismatch)'); window.history.back();</script>";
+        exit;
+    }
+
+    // Sanitization: ป้องกัน XSS โดยการลบ HTML Tags และตัดช่องว่าง
+    $fullname = trim(strip_tags($_POST['fullname'] ?? ''));
+    $department = trim(strip_tags($_POST['department'] ?? ''));
+    $username = trim(strip_tags($_POST['username'] ?? ''));
+    $$password = $_POST['password'] ?? ''; 
     $confirm_password = $_POST['confirm_password'];
 
-    // 1. ตรวจสอบรหัสผ่านตรงกันไหม
+  // [เพิ่มใหม่] Validation: ตรวจสอบความปลอดภัยรหัสผ่าน
+    // 1. ตรวจสอบความยาว (ขั้นต่ำ 12 ตัว)
+    if (strlen($password) < 12) {
+        echo "<script>alert('❌ รหัสผ่านต้องมีความยาวอย่างน้อย 12 ตัวอักษร'); window.history.back();</script>";
+        exit;
+    }
+    // 2. ตรวจสอบว่ามีทั้งตัวเลขและตัวอักษร
+    if (!preg_match('/[a-zA-Z]/', $password) || !preg_match('/[0-9]/', $password)) {
+        echo "<script>alert('❌ รหัสผ่านต้องประกอบด้วยตัวอักษรภาษาอังกฤษและตัวเลขผสมกัน'); window.history.back();</script>";
+        exit;
+    }
+
+    // 1. ตรวจสอบรหัสผ่านตรงกันไหม (โค้ดเดิม)
     if ($password !== $confirm_password) {
         echo "<script>alert('❌ รหัสผ่านไม่ตรงกัน'); window.history.back();</script>";
         exit;
@@ -46,7 +68,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </script>";
         }
     } catch (PDOException $e) {
-        echo "Error: " . $e->getMessage();
+        // Security: ไม่ควรแสดง Error ของ Database โดยตรง (Information Disclosure) ให้เก็บลง Log แทน
+        error_log("Register Error: " . $e->getMessage());
+        echo "<script>
+            alert('❌ เกิดข้อผิดพลาดในการบันทึกข้อมูล กรุณาลองใหม่ภายหลัง'); 
+            window.history.back();
+        </script>";
     }
 } else {
     header("Location: ../login.php");

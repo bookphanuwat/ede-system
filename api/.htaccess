@@ -1,5 +1,13 @@
 <IfModule mod_headers.c>
   Header set X-UA-Compatible "IE=Edge,chrome=1"
+  
+  # --- ส่วนที่เพิ่มใหม่ (Security Headers) ---
+  # ป้องกันการถูกทำ Clickjacking
+  Header always set X-Frame-Options "SAMEORIGIN"
+  # ป้องกันการเดา Content-type (MIME sniffing)
+  Header set X-Content-Type-Options "nosniff"
+  # ----------------------------------------
+
   # mod_headers can't match by content-type, but we don't want to send this header on *everything*...
   <FilesMatch "\.(appcache|crx|css|eot|gif|htc|ico|jpe?g|js|m4a|m4v|manifest|mp4|oex|oga|ogg|ogv|otf|pdf|png|safariextz|svg|svgz|ttf|vcf|webm|webp|woff|xml|xpi)$">
     Header unset X-UA-Compatible
@@ -15,12 +23,16 @@
 
   Options +FollowSymLinks +MultiViews
 
-  Header always set Access-Control-Allow-Origin "*"
+  # --- ส่วนที่แก้ไข (Comment ออก) ---
+  # ปิดการทำงานบรรทัดนี้ เพราะซ้ำซ้อนกับใน api/index.php
+  # Header always set Access-Control-Allow-Origin "https://athweb.xyz"
+  # --------------------------------
+
   Header always set Access-Control-Max-Age "1000"
   Header always set Access-Control-Allow-Headers "Accept, Accept-Encoding, Authorization, Content-Type, Client-Security-Token, Origin, X-Requested-With, X-Token-Auth"
   Header always set Access-Control-Allow-Methods "GET, DELETE, PATCH, POST, PUT, OPTIONS"
 
-  # Handle Authorization Header
+  # Handle Authorization 
   RewriteCond %{HTTP:Authorization} .
   RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
 
@@ -45,6 +57,5 @@
   RewriteRule ^([A-Z]+-[0-9]+-[A-Z0-9]+)/?$ index.php?code=$1 [QSA]
   # เดิม: /api/assets-import-csv/ => index.php?dev=assets-import-csv
   RewriteRule ^([0-9a-z-]+)/?$  index.php?dev=$1 [QSA]
-
 
 </IfModule>

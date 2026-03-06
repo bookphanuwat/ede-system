@@ -1,35 +1,48 @@
-// ตั้งค่าตัวแปร Global
-const MY_LIFF_ID = "2008591805-LlbR2M99";
-let userProfile = { userId: "", displayName: "Guest", pictureUrl: "" };
-let currentDocCode = "";
+var API_BASE = (typeof site_url !== 'undefined') ? site_url : '.';
+var MY_LIFF_ID = "2008591805-LlbR2M99";
+var userProfile = { userId: "", displayName: "Guest", pictureUrl: "" };
+var currentDocCode = "";
+var currentDocWorkflowId = "cat_default";
+var originalFetch = window.fetch;
 
-// [แก้ไข 1] เปลี่ยนตัวแปรจาก creator เป็น workflow_id
-let currentDocWorkflowId = "cat_default"; 
-
-// ฟังก์ชัน Bypass Cache
-const originalFetch = window.fetch;
+// Override fetch เพื่อแก้ปัญหา Caching บน LINE Browser
 window.fetch = function(url, options) {
-    if (url.toString().startsWith("https://liffsdk.line-scdn.net/xlt/") && url.toString().endsWith(".json")) {
-        console.log("Bypassing LIFF Cache:", url);
-        url = url + "?ts=" + Math.random();
+    if (url && url.toString().startsWith("https://liffsdk.line-scdn.net/xlt/") && url.toString().endsWith(".json")) {
+        url += "?ts=" + Math.random();
     }
     return originalFetch(url, options);
 };
 
-// --- Main ---
+// --- Main Init ---
 async function main() {
     try {
         await liff.init({ liffId: MY_LIFF_ID });
-        if (!liff.isLoggedIn()) { liff.login(); return; }
+        
+        if (!liff.isLoggedIn()) {
+            liff.login();
+            return;
+        }
+        
         userProfile = await liff.getProfile();
         
-        if (document.getElementById("userImg")) document.getElementById("userImg").src = userProfile.pictureUrl;
-        if (document.getElementById("userName")) document.getElementById("userName").innerText = userProfile.displayName;
+        var imgEl = document.getElementById("userImg");
+        var nameEl = document.getElementById("userName");
+        
+        if (imgEl && userProfile.pictureUrl) {
+            imgEl.src = userProfile.pictureUrl;
+        }
+        if (nameEl) {
+            nameEl.innerText = userProfile.displayName || "Guest";
+        }
+        
+        if (!liff.isInClient()) {
+            Swal.fire("แจ้งเตือน", "กรุณาเปิดผ่านแอปพลิเคชัน LINE บนมือถือเพื่อใช้งานสแกนเนอร์", "warning");
+        }
 
-        if (!liff.isInClient()) Swal.fire("แจ้งเตือน", "กรุณาเปิดผ่านแอปพลิเคชัน LINE บนมือถือเพื่อใช้งานสแกนเนอร์", "warning");
     } catch (err) {
         console.error("LIFF Init Error:", err);
-        Swal.fire("Error", "LIFF Init Failed: " + err, "error");
+        var nameEl = document.getElementById("userName");
+        if (nameEl) nameEl.innerText = "Guest (Error)";
     }
 }
 
@@ -39,119 +52,213 @@ async function openLineScanner() {
         try {
             const result = await liff.scanCodeV2();
             if (result.value) loadDocDetail(result.value, true);
-        } catch (err) { console.error("Scan Error:", err); }
+        } catch (err) {
+            console.error("Scan Error:", err);
+        }
     } else {
         Swal.fire({ icon: "error", title: "ไม่รองรับ", text: "ฟีเจอร์นี้ใช้งานได้เฉพาะบนแอป LINE ในมือถือเท่านั้น" });
     }
 }
 
-// --- Tabs ---
+// --- Switch Tab ---
 function switchTab(tabName) {
+    // ลบ Active Class จากทุกหน้า
     document.querySelectorAll(".page-section").forEach(el => el.classList.remove("active"));
     document.querySelectorAll(".nav-item").forEach(el => el.classList.remove("active"));
-    document.getElementById("tab-" + tabName).classList.add("active");
-    if (event && event.currentTarget) event.currentTarget.classList.add("active");
-
-    if (tabName === "scan") openLineScanner();
-    else if (tabName === "history") loadHistory();
-}
-
-// --- Search ---
-async function searchDocs() {
-    const keyword = document.getElementById("searchInput").value;
-    if (keyword) {
-        document.getElementById("searchResultArea").innerHTML = '<div class="text-center mt-3"><i class="fas fa-spinner fa-spin"></i> กำลังค้นหา...</div>';
-        try {
-            const res = await fetch(`api/liff_api.php?action=search&keyword=${keyword}`);
-            const json = await res.json();
-            let html = "";
-            if (json.data && json.data.length > 0) {
-                json.data.forEach(doc => {
-                    html += `<div class="search-card" onclick="loadDocDetail('${doc.document_code}', false)">
-                                <div class="fw-bold">${doc.title}</div>
-                                <small class="text-muted">${doc.document_code}</small>
-                                <span class="badge bg-light text-dark float-end">${doc.current_status}</span>
-                             </div>`;
-                });
-            } else { html = '<p class="text-center text-muted mt-3">ไม่พบข้อมูล</p>'; }
-            document.getElementById("searchResultArea").innerHTML = html;
-        } catch (err) { console.error(err); document.getElementById("searchResultArea").innerHTML = '<p class="text-center text-danger">เกิดข้อผิดพลาด</p>'; }
+    
+    // เพิ่ม Active Class ให้หน้าที่เลือก
+    var targetPage = document.getElementById("tab-" + tabName);
+    if (targetPage) targetPage.classList.add("active");
+    
+    var targetBtn = document.getElementById("tab-btn-" + tabName);
+    if (targetBtn) targetBtn.classList.add("active");
+    
+    if (tabName === "history") {
+        loadHistory();
     }
 }
 
-// --- History ---
+// --- Search (แก้ไข CSP: ลบ onclick, ใช้ data-code แทน) ---
+async function searchDocs() {
+    const keyword = document.getElementById("searchInput").value;
+    if (keyword) {
+        const resultArea = document.getElementById("searchResultArea");
+        resultArea.innerHTML = '<div class="text-center mt-3"><i class="fas fa-spinner fa-spin"></i> กำลังค้นหา...</div>';
+        
+        try {
+            const res = await fetch(`${API_BASE}/api/index.php?dev=search&keyword=${encodeURIComponent(keyword)}`);
+            const json = await res.json();
+            
+            if (json.data && json.data.length > 0) {
+                // ถ้าเจอรายการเดียว ให้โหลดรายละเอียดเลย
+                if (json.data.length === 1) {
+                    resultArea.innerHTML = ''; 
+                    loadDocDetail(json.data[0].document_code, false);
+                    return; 
+                }
+
+                // ถ้าเจอหลายรายการ
+                let html = '<p class="text-muted small ms-2 mb-2">พบ ' + json.data.length + ' รายการ</p>';
+                json.data.forEach(doc => {
+                    let badgeClass = 'bg-secondary';
+                    const st = doc.current_status;
+                    if(st === 'Received' || st === 'ได้รับแล้ว' || st === 'อนุมัติ') badgeClass = 'bg-success';
+                    else if(st === 'Sent' || st === 'ส่งต่อ' || st === 'รออนุมัติ') badgeClass = 'bg-warning text-dark';
+                    else if(st === 'Rejected' || st === 'ไม่อนุมัติ' || st === 'ยกเลิก') badgeClass = 'bg-danger';
+                    else if(st === 'Registered' || st === 'ลงทะเบียนใหม่') badgeClass = 'bg-info text-dark';
+
+                    // [แก้ไข] ลบ onclick="..." ออก ใส่ data-code="..." แทน
+                    html += `<div class="card shadow-sm border-0 mb-2 clickable-doc-item" data-code="${doc.document_code}" style="cursor:pointer;">
+                                <div class="card-body p-3 d-flex justify-content-between align-items-center">
+                                    <div style="overflow:hidden; max-width: 65%;">
+                                        <div class="fw-bold text-dark text-truncate">${doc.title}</div>
+                                        <small class="text-muted"><i class="fas fa-barcode me-1"></i>${doc.document_code}</small>
+                                    </div>
+                                    <span class="badge rounded-pill ${badgeClass}">${doc.current_status}</span>
+                                </div>
+                             </div>`;
+                });
+                resultArea.innerHTML = html;
+            } else {
+                resultArea.innerHTML = `
+                    <div class="text-center text-muted mt-5">
+                        <i class="far fa-file-excel fa-2x mb-2"></i>
+                        <p>ไม่พบเอกสารที่ค้นหา</p>
+                    </div>`;
+            }
+        } catch (err) {
+            console.error(err);
+            resultArea.innerHTML = '<p class="text-center text-danger mt-3">เกิดข้อผิดพลาดในการเชื่อมต่อ</p>';
+        }
+    }
+}
+
+// --- History (แก้ไข CSP: ลบ onclick, ใช้ data-code แทน) ---
 async function loadHistory() {
     try {
-        const res = await fetch(`api/liff_api.php?action=history&line_id=${userProfile.userId}`);
+        const res = await fetch(`${API_BASE}/api/index.php?dev=history&line_id=${userProfile.userId}`);
         const json = await res.json();
         let html = "";
         if (json.data && json.data.length > 0) {
             json.data.forEach(log => {
-                html += `<div class="history-card status-${log.status}" onclick="loadDocDetail('${log.document_code}', false)">
-                            <div class="d-flex justify-content-between">
-                                <span class="fw-bold text-dark">${log.status}</span>
-                                <small class="text-muted">${log.action_time}</small>
+                let statusColor = 'text-secondary';
+                if(log.status === 'Received') statusColor = 'text-success';
+                else if(log.status === 'Sent') statusColor = 'text-warning';
+
+                // [แก้ไข] ลบ onclick="..." ออก ใส่ data-code="..." แทน
+                html += `<div class="card shadow-sm border-0 mb-2 clickable-doc-item" data-code="${log.document_code}" style="cursor:pointer;">
+                            <div class="card-body p-3">
+                                <div class="d-flex justify-content-between mb-1">
+                                    <span class="fw-bold ${statusColor}">${log.status}</span>
+                                    <small class="text-muted" style="font-size:0.75rem;">${log.action_time}</small>
+                                </div>
+                                <small class="d-block text-dark text-truncate">${log.title}</small>
                             </div>
-                            <small class="d-block text-truncate">${log.title}</small>
                          </div>`;
             });
-        } else { html = '<p class="text-center text-muted mt-5">ยังไม่มีประวัติการสแกน</p>'; }
+        } else {
+            html = '<div class="text-center text-muted mt-5"><p>ยังไม่มีประวัติการสแกน</p></div>';
+        }
         document.getElementById("historyListArea").innerHTML = html;
-    } catch (err) { console.error(err); }
+    } catch (err) {
+        console.error(err);
+        document.getElementById("historyListArea").innerHTML = '<p class="text-center text-danger">โหลดประวัติไม่สำเร็จ</p>';
+    }
 }
 
-// --- Load Detail (จุดสำคัญ 1) ---
+// --- Load Detail ---
 async function loadDocDetail(code, fromScanner = false) {
     currentDocCode = code;
-    if (!fromScanner) Swal.fire({ title: "Loading...", didOpen: () => Swal.showLoading() });
+    if (!fromScanner) Swal.fire({ title: "กำลังโหลด...", allowOutsideClick: false, didOpen: () => Swal.showLoading() });
     
     try {
-        let url = `${site_url}/api/getdocinfo/${code}/`; 
-        if (fromScanner) url += "?action=scan";
+        let url = `${API_BASE}/api/getdocinfo/${code}/`;
+        if (fromScanner) {
+            url += "?action=scan";
+            url += `&line_id=${encodeURIComponent(userProfile.userId || "")}`;
+            url += `&name=${encodeURIComponent(userProfile.displayName || "Guest")}`;
+            url += `&pic=${encodeURIComponent(userProfile.pictureUrl || "")}`;
+        }
         
         const res = await fetch(url);
         const json = await res.json();
         
-        if (json.error) throw new Error(json.error);
+        if (json.error || json.status === 'error') throw new Error(json.message || "Error");
+        
         const doc = json.doc;
-
-        // [แก้ไข 2] รับค่า workflow_id จากเอกสารมาเก็บไว้ (ถ้าไม่มี ใช้ cat_default)
-        currentDocWorkflowId = doc.workflow_id || 'cat_default';
-
+        currentDocWorkflowId = doc.workflow_id || "cat_default";
+        
         document.getElementById("detailTitle").innerText = doc.title;
         document.getElementById("detailCode").innerText = doc.document_code;
-        document.getElementById("detailStatus").innerHTML = `${doc.current_status} <span class="badge bg-light text-dark ms-2">👁️ ${doc.view_count}</span>`;
+        
+        let badgeClass = 'bg-secondary';
+        const st = doc.current_status;
+        if(st === 'Received' || st === 'ได้รับแล้ว') badgeClass = 'bg-success';
+        else if(st === 'Sent' || st === 'ส่งต่อ') badgeClass = 'bg-warning text-dark';
+        else if(st === 'Registered') badgeClass = 'bg-info text-dark';
+        
+        document.getElementById("detailStatus").innerHTML = `<span class="badge ${badgeClass}">${doc.current_status}</span>`;
+        document.getElementById("detailViews").innerText = doc.view_count;
         document.getElementById("detailReceiver").innerText = doc.receiver_name || "-";
-
+        
         let timelineHtml = "";
-        if (json.logs) {
-            json.logs.forEach(log => {
+        if (json.logs && json.logs.length > 0) {
+            json.logs.forEach((log, index) => {
                 const actor = log.actor_name_snapshot || log.fullname || "Unknown";
-                timelineHtml += `<div class="mb-3 ps-3 border-start border-3 ${log.status === "Received" ? "border-success" : "border-warning"}">
-                                    <div class="fw-bold text-dark">${log.status}</div>
-                                    <small class="text-muted">${log.action_time}</small><br>
-                                    <small>โดย: ${actor}</small>
-                                 </div>`;
+                const isLatest = index === 0;
+                const circleClass = isLatest ? 'bg-success' : 'bg-secondary';
+                
+                timelineHtml += `
+                    <div class="d-flex mb-3 position-relative">
+                        <div class="me-3 d-flex flex-column align-items-center" style="width: 20px;">
+                             <div class="rounded-circle ${circleClass} border border-white shadow-sm" style="width: 12px; height: 12px; z-index: 2;"></div>
+                             ${index !== json.logs.length - 1 ? '<div class="flex-grow-1 bg-light" style="width: 2px;"></div>' : ''}
+                        </div>
+                        <div class="pb-3 flex-grow-1 border-bottom border-light">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <span class="fw-bold text-dark" style="font-size: 0.9rem;">${log.status}</span>
+                                <small class="text-muted" style="font-size: 0.7rem;">${log.action_time}</small>
+                            </div>
+                            <div class="d-flex align-items-center">
+                                <small class="text-secondary me-1">โดย:</small>
+                                <small class="fw-bold text-dark">${actor}</small>
+                            </div>
+                            ${log.location_note ? `<small class="text-muted d-block mt-1 fst-italic"><i class="fas fa-comment-alt me-1"></i>${log.location_note}</small>` : ''}
+                        </div>
+                    </div>`;
             });
+        } else {
+            timelineHtml = '<p class="text-center text-muted py-3">ยังไม่มีประวัติ</p>';
         }
         document.getElementById("detailTimeline").innerHTML = timelineHtml;
         
+        // --- [START UPDATE] ควบคุมการแสดงปุ่มอัปเดตสถานะ ---
+        const updateBtn = document.getElementById("btn-open-update");
+        if (updateBtn) {
+            // แสดงเฉพาะเมื่อ fromScanner เป็น true (มาจากการสแกน)
+            updateBtn.style.display = fromScanner ? "" : "none";
+        }
+        // --- [END UPDATE] ---
+
         Swal.close();
         document.getElementById("detailOverlay").style.display = "block";
+        document.body.style.overflow = "hidden"; 
         
     } catch (err) {
-        Swal.fire("Error", "ไม่พบข้อมูลเอกสาร หรือ " + err.message, "error");
+        Swal.fire("ไม่พบข้อมูล", "ไม่พบเอกสาร หรือ รหัสไม่ถูกต้อง", "error");
     }
 }
 
-function closeDetail() { document.getElementById("detailOverlay").style.display = "none"; }
+function closeDetail() {
+    document.getElementById("detailOverlay").style.display = "none";
+    document.body.style.overflow = "auto";
+}
 
-// --- Update Modal (จุดสำคัญ 2) ---
+// --- Update Modal ---
 async function openUpdateModal() {
     let statusOptions = "";
     try {
-        // [แก้ไข 3] ส่ง workflow_id ไปถาม API (จะได้เฉพาะอันที่ต้องการ)
-        const res = await fetch(`api/liff_api.php?action=get_statuses&workflow_id=${currentDocWorkflowId}`);
+        const res = await fetch(`${API_BASE}/api/index.php?dev=get-statuses&workflow_id=${currentDocWorkflowId}`);
         const json = await res.json();
         
         if (json.status === "success" && json.data.length > 0) {
@@ -175,29 +282,117 @@ async function openUpdateModal() {
 
     const { value: formValues } = await Swal.fire({
         title: "อัปเดตสถานะ",
-        html: `<label class="form-label text-start w-100">เลือกสถานะ:</label>
-               <select id="swal-status" class="form-select mb-3">${statusOptions}</select>` +
-              `<label class="form-label text-start w-100">*หมายเหตุ (ถ้ามี):</label>
-               <input id="swal-receiver" class="form-control" placeholder="ระบุหมายเหตุ">`,
-        focusConfirm: false, showCancelButton: true, confirmButtonText: "บันทึก", confirmButtonColor: "#00C853",
-        preConfirm: () => [document.getElementById("swal-status").value, document.getElementById("swal-receiver").value]
+        html: `<div class="text-start">
+                 <label class="form-label text-muted small">สถานะใหม่</label>
+                 <select id="swal-status" class="form-select mb-3 shadow-none">${statusOptions}</select>
+                 <label class="form-label text-muted small">หมายเหตุ / ส่งต่อถึง (ถ้ามี)</label>
+                 <input id="swal-receiver" class="form-control shadow-none" placeholder="ระบุข้อความ...">
+               </div>`,
+        focusConfirm: false,
+        showCancelButton: true,
+        confirmButtonText: "บันทึกข้อมูล",
+        cancelButtonText: "ยกเลิก",
+        confirmButtonColor: "#198754",
+        reverseButtons: true,
+        preConfirm: () => {
+            return [
+                document.getElementById("swal-status").value,
+                document.getElementById("swal-receiver").value
+            ];
+        }
     });
 
     if (formValues) {
         const [status, receiver] = formValues;
-        const formData = new FormData();
-        formData.append("doc_code", currentDocCode);
-        formData.append("status", status);
-        formData.append("receiver_name", receiver);
-        formData.append("line_user_id", userProfile.userId);
-        formData.append("display_name", userProfile.displayName);
-        formData.append("picture_url", userProfile.pictureUrl);
-        formData.append("device_info", liff.getOS());
+        const payload = {
+            doc_code: currentDocCode,
+            status: status,
+            receiver_name: receiver,
+            line_user_id: userProfile.userId,
+            display_name: userProfile.displayName,
+            picture_url: userProfile.pictureUrl,
+            device_info: liff.getOS() || "Web"
+        };
 
-        await fetch("api/update_status.php", { method: "POST", body: formData });
-        Swal.fire({ title: "สำเร็จ", text: "บันทึกข้อมูลเรียบร้อยแล้ว", icon: "success", timer: 1500, showConfirmButton: false })
-        .then(() => { closeDetail(); });
+        Swal.fire({ title: 'กำลังบันทึก...', didOpen: () => Swal.showLoading() });
+
+        try {
+            const res = await fetch(`${API_BASE}/api/index.php?dev=update-status`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+            const result = await res.json();
+            
+            if(result.status === 'success'){
+                Swal.fire({
+                    title: "เรียบร้อย",
+                    text: "อัปเดตสถานะสำเร็จ",
+                    icon: "success",
+                    timer: 1500,
+                    showConfirmButton: false
+                }).then(() => {
+                    loadDocDetail(currentDocCode, false);
+                });
+            } else {
+                throw new Error(result.message);
+            }
+        } catch(err) {
+            Swal.fire("เกิดข้อผิดพลาด", err.message, "error");
+        }
     }
 }
 
-main();
+// --- Event Listeners & Delegation (ส่วนสำคัญ: จัดการคลิกแบบรวมศูนย์) ---
+document.addEventListener("DOMContentLoaded", function() {
+    var scanBtn = document.getElementById("btn-scan");
+    if (scanBtn) scanBtn.addEventListener("click", openLineScanner);
+    
+    var searchBtn = document.getElementById("btn-search");
+    if (searchBtn) searchBtn.addEventListener("click", searchDocs);
+
+    var searchInput = document.getElementById("searchInput");
+    if (searchInput) {
+        searchInput.addEventListener("keypress", function(event) {
+            if (event.key === "Enter") {
+                event.preventDefault();
+                searchDocs();
+            }
+        });
+    }
+    
+    var closeDetailBtn = document.getElementById("btn-close-detail");
+    if (closeDetailBtn) closeDetailBtn.addEventListener("click", closeDetail);
+    
+    var openUpdateBtn = document.getElementById("btn-open-update");
+    if (openUpdateBtn) openUpdateBtn.addEventListener("click", openUpdateModal);
+    
+    // Tab Navigation
+    var tabScan = document.getElementById("tab-btn-scan");
+    if (tabScan) tabScan.addEventListener("click", function() { switchTab("scan"); });
+    
+    var tabSearch = document.getElementById("tab-btn-search");
+    if (tabSearch) tabSearch.addEventListener("click", function() { switchTab("search"); });
+    
+    var tabHistory = document.getElementById("tab-btn-history");
+    if (tabHistory) tabHistory.addEventListener("click", function() { switchTab("history"); });
+
+    // [เพิ่มใหม่] Event Delegation สำหรับรายการ Search และ History
+    // แทนที่จะใส่ onclick ใน HTML เรามาดักคลิกที่ container แม่แทน
+    
+    function handleDocItemClick(event) {
+        // หา element ที่มี class 'clickable-doc-item' ที่ถูกคลิก (หรือ parent ของมัน)
+        const target = event.target.closest('.clickable-doc-item');
+        if (target && target.dataset.code) {
+            loadDocDetail(target.dataset.code, false);
+        }
+    }
+
+    const searchArea = document.getElementById("searchResultArea");
+    if (searchArea) searchArea.addEventListener("click", handleDocItemClick);
+
+    const historyArea = document.getElementById("historyListArea");
+    if (historyArea) historyArea.addEventListener("click", handleDocItemClick);
+    
+    main();
+});

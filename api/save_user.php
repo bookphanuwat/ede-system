@@ -1,67 +1,131 @@
 <?php
+ini_set('session.cookie_httponly', 1);
+ini_set('session.cookie_secure', 1);
 session_start();
-require_once '../config/db.php'; // ตรวจสอบ path ให้ถูก ต้องถอยกลับ 1 ขั้น
+require_once '../config/db.php'; 
+
+// ใหม่: อนุญาตให้ User เข้ามาได้ แต่ต้องมี Logic ป้องกัน
+$is_admin = (isset($_SESSION['role']) && $_SESSION['role'] === 'Administrator');
+$current_user_id = $_SESSION['user_id'] ?? 0;
+
+// รับค่า user_id ที่ส่งมาจากฟอร์ม
+$post_user_id = isset($_POST['user_id']) ? intval($_POST['user_id']) : 0;
+
+// ตรวจสอบว่า User ที่กำลังถูกแก้ไขเป็นใคร
+$stmtCheck = $pdo->prepare("SELECT role_id FROM users WHERE user_id = ?");
+$stmtCheck->execute([$post_user_id]);
+$target_user = $stmtCheck->fetch();
+
+// Logic: ถ้าไม่ใช่ Admin ห้ามแก้คนอื่น 
+// และถ้าเป็น Admin ทั่วไป ห้ามแก้ Admin คนอื่น (สมมติ role_id 1 คือ Super Admin)
+if (!$is_admin && ($post_user_id !== $current_user_id)) {
+     header('Location: ../user_form.php?status=error&msg=คุณไม่มีสิทธิ์แก้ไขข้อมูลผู้อื่น');
+     exit();
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // รับค่าจากฟอร์ม
-    $user_id = $_POST['user_id'] ?? null;
-    $username = trim($_POST['username'] ?? '');
-    $password = $_POST['password'] ?? '';
-    $fullname = trim($_POST['fullname']);
-    $department = trim($_POST['department']);
-    $role_id = $_POST['role_id'];
+    // 2. CSRF Protection
+    if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
+        die("Error: Invalid CSRF Token");
+    }
+
+    // รับค่าและแปลง Type
+    $user_id = isset($_POST['user_id']) && $_POST['user_id'] !== '' ? (int)$_POST['user_id'] : null;
+    
+    // ฟังก์ชันทำความสะอาดข้อมูล
+    function sanitizeInput($data) {
+        $data = str_replace(chr(0), '', $data);
+        $data = trim(strip_tags($data ?? ''));
+        return $data;
+    }
+
+    $username   = sanitizeInput($_POST['username']);
+    $fullname   = sanitizeInput($_POST['fullname']);
+    $department = sanitizeInput($_POST['department']);
+    $password   = $_POST['password'] ?? '';
+    $role_id    = isset($_POST['role_id']) ? (int)$_POST['role_id'] : 0;
+
+    // 3. ตรวจสอบ Path Traversal
+    if (preg_match('/(\.\.|[\/\\\\])/', $fullname) || preg_match('/(\.\.|[\/\\\\])/', $department)) {
+        error_log("Security Warning: Path Traversal attempt from " . $_SERVER['REMOTE_ADDR']);
+        echo "<script>alert('❌ ข้อมูลไม่ถูกต้อง: ห้ามใช้อักขระพิเศษ'); window.history.back();</script>";
+        exit;
+    }
+
+    if (empty($role_id)) {
+        echo "<script>alert('❌ กรุณาเลือกสิทธิ์การใช้งาน (Role)'); window.history.back();</script>";
+        exit;
+    }
+
+    // 4. ตรวจสอบรหัสผ่าน (แก้บั๊ก: บังคับตรวจถ้าเป็นการเพิ่มใหม่ หรือถ้ามีการกรอกมาตอนแก้ไข)
+    if (!empty($password) || empty($user_id)) {
+        // ถ้าเป็นเพิ่มใหม่ (Insert) ต้องไม่ว่าง
+        if (empty($user_id) && empty($password)) {
+             echo "<script>alert('❌ กรุณากำหนดรหัสผ่านสำหรับการสร้างบัญชีใหม่'); window.history.back();</script>";
+             exit;
+        }
+        
+        // ถ้ามีการกรอกรหัสผ่าน (ไม่ว่าจะเพิ่มหรือแก้) ต้องผ่านกฎ
+        if (!empty($password)) {
+            if (strlen($password) < 12) {
+                echo "<script>alert('❌ รหัสผ่านต้องมีความยาวอย่างน้อย 12 ตัวอักษร'); window.history.back();</script>";
+                exit;
+            }
+            if (!preg_match('/[a-zA-Z]/', $password) || !preg_match('/[0-9]/', $password)) {
+                echo "<script>alert('❌ รหัสผ่านต้องประกอบด้วยตัวอักษรภาษาอังกฤษและตัวเลขผสมกัน'); window.history.back();</script>";
+                exit;
+            }
+        }
+    }
 
     try {
         if ($user_id) {
             // --- กรณีแก้ไข (Update) ---
-            
-            // ถ้ามีการกรอก Password ใหม่ ให้ Update Password ด้วย
             if (!empty($password)) {
                 $password_hash = password_hash($password, PASSWORD_DEFAULT);
                 $stmt = $pdo->prepare("UPDATE users SET fullname=?, department=?, role_id=?, password_hash=? WHERE user_id=?");
                 $stmt->execute([$fullname, $department, $role_id, $password_hash, $user_id]);
             } else {
-                // ถ้าไม่แก้ Password (เว้นว่างไว้) ก็ไม่ต้องอัปเดตฟิลด์นี้
                 $stmt = $pdo->prepare("UPDATE users SET fullname=?, department=?, role_id=? WHERE user_id=?");
                 $stmt->execute([$fullname, $department, $role_id, $user_id]);
             }
             
-            echo "<script>alert('✅ แก้ไขข้อมูลเรียบร้อย'); window.location.href='../settings.php';</script>";
+            header("Location: ../settings/?status=success&msg=" . urlencode('แก้ไขข้อมูลเรียบร้อย'));
+            exit;
 
         } else {
             // --- กรณีเพิ่มใหม่ (Insert) ---
             
-            // 1. เช็คก่อนว่า username ซ้ำไหม?
+            // ตรวจสอบ Username ซ้ำ
+            if (!preg_match('/^[a-zA-Z0-9_]+$/', $username)) {
+                echo "<script>alert('❌ Username ไม่ถูกต้อง (A-Z, 0-9, _)'); window.history.back();</script>";
+                exit;
+            }
+
             $check = $pdo->prepare("SELECT COUNT(*) FROM users WHERE username = ?");
             $check->execute([$username]);
             if ($check->fetchColumn() > 0) {
-                echo "<script>alert('❌ Username นี้มีอยู่ในระบบแล้ว กรุณาเปลี่ยนใหม่'); window.history.back();</script>";
+                echo "<script>alert('❌ Username นี้มีอยู่ในระบบแล้ว'); window.history.back();</script>";
                 exit;
             }
 
-            // 2. ต้องมีรหัสผ่านเสมอสำหรับการสร้างใหม่
-            if (empty($password)) {
-                echo "<script>alert('❌ กรุณากำหนดรหัสผ่าน'); window.history.back();</script>";
-                exit;
-            }
-
-            // 3. บันทึกลงฐานข้อมูล
+            // บันทึกข้อมูล
             $password_hash = password_hash($password, PASSWORD_DEFAULT);
             $stmt = $pdo->prepare("INSERT INTO users (username, password_hash, fullname, department, role_id) VALUES (?, ?, ?, ?, ?)");
             $stmt->execute([$username, $password_hash, $fullname, $department, $role_id]);
 
-            echo "<script>alert('✅ เพิ่มผู้ใช้งานเรียบร้อย'); window.location.href='../settings.php';</script>";
+            header("Location: ../settings/?status=success&msg=" . urlencode('เพิ่มผู้ใช้งานเรียบร้อย'));
+            exit;
         }
 
     } catch (PDOException $e) {
-        // แสดง Error ชัดเจนเพื่อการ Debug
-        echo "<h3>เกิดข้อผิดพลาดทางฐานข้อมูล:</h3>";
-        echo "Error: " . $e->getMessage();
-        echo "<br><br><a href='../settings.php'>กลับไปหน้าตั้งค่า</a>";
+        error_log("Database Error in save_user.php: " . $e->getMessage());
+        echo "<script>alert('❌ เกิดข้อผิดพลาดทางฐานข้อมูล'); window.history.back();</script>";
     }
+
 } else {
-    // ถ้าเข้าไฟล์นี้ตรงๆ โดยไม่ได้ Submit Form
-    header("Location: ../settings.php");
+    // ถ้าไม่ใช่ POST ให้ดีดกลับไปหน้า Settings
+    header("Location: ../settings/");
     exit;
 }
 ?>

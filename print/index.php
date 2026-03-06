@@ -191,7 +191,7 @@
         <p style="font-size: 14pt; color: #555;">รหัสอ้างอิงเอกสาร</p>
 
         <div class="qr-box">
-            <img src="<?php echo $qr_url; ?>" width="350" height="350" alt="QR Code">
+            <img src="<?php echo $qr_url; ?>" width="255" height="255" alt="QR Code">
         </div>
 
         <div class="divider"></div>

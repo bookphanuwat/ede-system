@@ -7,8 +7,12 @@ $header_class = "header-menu";
 <div class="page-content bg-light">
     <div class="container py-4">
         <div class="text-center mb-5">
-                    <h2 class="fw-bold text-secondary">ยินดีต้อนรับสู่ระบบ EDE</h2>
+                    <h2 class="fw-bold text-secondary">ยินดีต้อนรับสู่ระบบ EDE System</h2>
+                    <h5 class="text-muted mb-4">Electronic Document Exchange System</h5>
+            
+    
                     <p class="text-muted">กรุณาเลือกเมนูที่ต้องการใช้งาน</p>
+                    
                 </div>
 
                 <div class="row g-4 justify-content-center">
@@ -82,7 +86,7 @@ $header_class = "header-menu";
                     <div class="col-md-6 col-lg-4">
                         <a href="<?php echo SITE_URL; ?>/scan-history/" class="text-decoration-none">
                             <div class="card menu-card shadow-sm rounded-4 p-4 text-center">
-                                <div class="menu-icon-box shadow-sm" style="background: #546E7A;">
+                                <div class="menu-icon-box shadow-sm" style="background: #19422b;">
                                     <i class="fas fa-history"></i>
                                 </div>
                                 <h4 class="fw-bold text-dark">ประวัติการสแกน</h4>
@@ -103,6 +107,7 @@ $header_class = "header-menu";
                             </div>
                         </a>
                     </div>
+                    
 
                 </div>
             </div>
